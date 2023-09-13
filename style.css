@@ -1,0 +1,61 @@
+* {
+    user-select: none;
+}
+
+/* body {
+    display: flex;
+    flex-direction: row;
+} */
+
+/* #select-point, #input-projected-pos-x, #input-projected-pos-y, #input-world-pos-x, #input-world-pos-y, #input-world-pos-z {
+    width: 80px;
+} */
+
+input[type=number], select {
+    width: 80px;
+}
+
+#canvas {
+    width: 600px;
+    height: 400px;
+    background: black;
+    image-rendering: pixelated;
+    outline: none;
+}
+
+/* #canvas-error {
+    width: 600px;
+    height: 400px;
+    background: black;
+    image-rendering: pixelated;
+}
+
+:has(> #canvas-error) {
+    display: inline-block;
+    width: 600px;
+    height: 400px;
+    position: relative;
+}
+
+:has(> #canvas-error) > :nth-child(2) {
+    position: absolute;
+    top: calc(50% - 4px);
+    left: calc(50% - 1px);
+    width: 2px;
+    height: 8px;
+    background: red;
+}
+
+:has(> #canvas-error) > :nth-child(3) {
+    position: absolute;
+    top: calc(50% - 1px);
+    left: calc(50% - 4px);
+    width: 8px;
+    height: 2px;
+    background: red;
+} */
+
+#textarea-state {
+    width: 600px;
+    height: 200px;
+}

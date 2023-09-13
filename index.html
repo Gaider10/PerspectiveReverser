@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html>
+    <head>
+        <meta charset="utf-8">
+        <title></title>
+        <link rel="stylesheet" href="style.css">
+        <script src="script.js"></script>
+    </head>
+    <body>
+        <!-- <div> -->
+            <label>Image:</label>
+            <input id="input-image" type="file">
+            <br>
+            <label>Point:</label>
+            <select id="select-point"><option>None</option></select>
+            <br>
+            <label>World Pos:</label>
+            <input id="input-world-pos-x" type="number">
+            <input id="input-world-pos-y" type="number">
+            <input id="input-world-pos-z" type="number">
+            <input id="input-world-pos-copy" type="button" value="Copy">
+            <br>
+            <label>Projected Pos:</label>
+            <input id="input-projected-pos-x" type="number">
+            <input id="input-projected-pos-y" type="number">
+            <input id="input-projected-pos-copy" type="button" value="Copy">
+            <br>
+            <label>Line:</label>
+            <select id="select-line"><option>None</option></select>
+            <!-- <br>
+            <label>Line Axis:</label>
+            <input id="input-line-axis-x" type="number">
+            <input id="input-line-axis-y" type="number">
+            <input id="input-line-axis-z" type="number">
+            <input id="input-line-axis-calculate" type="button" value="Calculate"> -->
+            <br>
+            <canvas id="canvas"></canvas>
+            <br>
+            <label for="input-show-grid">Show Grid:</label>
+            <input id="input-show-grid" type="checkbox">
+            <br>
+            <label for="input-show-blur">Show Blur:</label>
+            <input id="input-show-blur" type="checkbox">
+            <br>
+            <label for="input-show-projected">Show Projected:</label>
+            <input id="input-show-projected" type="checkbox">
+            <br>
+            <label for="input-offset-by-01">Offset By 0.1:</label>
+            <input id="input-offset-by-01" type="checkbox">
+            <br>
+            <label>Camera Pos:</label>
+            <input id="input-camera-pos-x" type="number">
+            <input id="input-camera-pos-x-locked" type="checkbox">
+            <input id="input-camera-pos-y" type="number">
+            <input id="input-camera-pos-y-locked" type="checkbox">
+            <input id="input-camera-pos-z" type="number">
+            <input id="input-camera-pos-z-locked" type="checkbox">
+            <input id="input-camera-pos-copy" type="button" value="Copy">
+            <br>
+            <label>Camera Rot:</label>
+            <input id="input-camera-rot-yaw" type="number">
+            <input id="input-camera-rot-yaw-locked" type="checkbox">
+            <input id="input-camera-rot-pitch" type="number">
+            <input id="input-camera-rot-pitch-locked" type="checkbox">
+            <input id="input-camera-rot-copy" type="button" value="Copy">
+            <br>
+            <label>Camera Fov:</label>
+            <input id="input-camera-fov" type="number">
+            <input id="input-camera-fov-locked" type="checkbox">
+            <br>
+            <input id="input-camera-tp-copy" type="button" value="Copy as /tp command">
+            <input id="input-camera-tp-copy-offset" type="button" value="Copy as /tp command with toggled 0.1 offset">
+            <br>
+            <label>Iterations:</label>
+            <input id="input-iterations" type="number">
+            <br>
+            <input id="input-reverse" type="button" value="Reverse">
+            <br>
+            <textarea id="textarea-state"></textarea>
+        <!-- </div> -->
+        <!-- <div>
+            <label>Axis 1:</label>
+            <select id="select-axis-1-index">
+                <option>X</option>
+                <option>Y</option>
+                <option>Z</option>
+                <option>Yaw</option>
+                <option>Pitch</option>
+                <option>Fov</option>
+            </select>
+            <label>Range:</label>
+            <input id="input-axis-1-range" type="number">
+            <br>
+            <label>Axis 2:</label>
+            <select id="select-axis-2-index">
+                <option>X</option>
+                <option>Y</option>
+                <option>Z</option>
+                <option>Yaw</option>
+                <option>Pitch</option>
+                <option>Fov</option>
+            </select>
+            <label>Range:</label>
+            <input id="input-axis-2-range" type="number">
+            <br>
+            <label>Max Error:</label>
+            <input id="input-max-error" type="number">
+            <br>
+            <div>
+                <canvas id="canvas-error"></canvas>
+                <div></div>
+                <div></div>
+            </div>
+        </div> -->
+    </body>
+</html>
