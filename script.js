@@ -11,7 +11,10 @@ const CONFIG = {
 
 function project(constants, variables, worldPoint) {
     const [ offsetBy0_1, imageSizeX, imageSizeY ] = constants;
-    const [ x, y, z, yaw, pitch, fov ] = variables;
+    const [ x, y, z, yaw, pitch, fov, padLeft, padRight, padTop, padBottom ] = variables;
+
+    const fullImageSizeX = imageSizeX + padLeft + padRight;
+    const fullImageSizeY = imageSizeY + padTop + padBottom;
     
     const sinYaw = Math.sin(yaw);
     const cosYaw = Math.cos(yaw);
@@ -19,7 +22,7 @@ function project(constants, variables, worldPoint) {
     const cosPitch = Math.cos(-pitch);
 
     const f = 1 / Math.tan(fov * 0.5);
-    const aspectRatioInv = imageSizeY / imageSizeX;
+    const aspectRatioInv = fullImageSizeY / fullImageSizeX;
 
     // const viewDistance = 8 * 16 * 4;
     // const cameraDepth = 0.05;
@@ -49,15 +52,18 @@ function project(constants, variables, worldPoint) {
     const w4 = -z3 + (offsetBy0_1 ? -0.1 : 0);
     
     const w4Inv = w4 === 0 ? 0 : 1 / w4;
-    const x5 = (x4 * w4Inv + 1) * (imageSizeX * 0.5);
-    const y5 = (y4 * w4Inv + 1) * (imageSizeY * 0.5);
+    const x5 = (x4 * w4Inv + 1) * (fullImageSizeX * 0.5) - padLeft;
+    const y5 = (y4 * w4Inv + 1) * (fullImageSizeY * 0.5) - padTop;
 
     return [ x5, y5 ];
 }
 
 function projectedError(constants, variables, worldPoints, projectedPoints) {
     const [ offsetBy0_1, imageSizeX, imageSizeY ] = constants;
-    const [ x, y, z, yaw, pitch, fov ] = variables;
+    const [ x, y, z, yaw, pitch, fov, padLeft, padRight, padTop, padBottom ] = variables;
+
+    const fullImageSizeX = imageSizeX + padLeft + padRight;
+    const fullImageSizeY = imageSizeY + padTop + padBottom;
     
     const sinYaw = Math.sin(yaw);
     const cosYaw = Math.cos(yaw);
@@ -65,7 +71,7 @@ function projectedError(constants, variables, worldPoints, projectedPoints) {
     const cosPitch = Math.cos(-pitch);
 
     const f = 1 / Math.tan(fov * 0.5);
-    const aspectRatioInv = imageSizeY / imageSizeX;
+    const aspectRatioInv = fullImageSizeY / fullImageSizeX;
 
     // const viewDistance = 8 * 16 * 4;
     // const cameraDepth = 0.05;
@@ -98,8 +104,8 @@ function projectedError(constants, variables, worldPoints, projectedPoints) {
         const w4 = -z3 + (offsetBy0_1 ? -0.1 : 0);
 
         const w4Inv = w4 === 0 ? 0 : 1 / w4;
-        const x5 = (x4 * w4Inv + 1) * (imageSizeX * 0.5);
-        const y5 = (y4 * w4Inv + 1) * (imageSizeY * 0.5);
+        const x5 = (x4 * w4Inv + 1) * (fullImageSizeX * 0.5) - padLeft;
+        const y5 = (y4 * w4Inv + 1) * (fullImageSizeY * 0.5) - padTop;
 
         const [ px, py ] = projectedPoints[i];
 
@@ -198,7 +204,7 @@ window.addEventListener("load", () => {
      */
 
     /**
-     * @type {{
+     * @typedef {{
      *     points: Point[],
      *     selectedPoint: number | null,
      *     selectedPointHistory: number[],
@@ -220,10 +226,22 @@ window.addEventListener("load", () => {
      *     cameraPitchLocked: boolean,
      *     cameraFov: number,
      *     cameraFovLocked: boolean,
+     *     padLeft: number,
+     *     padLeftLocked: boolean,
+     *     padRight: number,
+     *     padRightLocked: boolean,
+     *     padTop: number,
+     *     padTopLocked: boolean,
+     *     padBottom: number,
+     *     padBottomLocked: boolean,
      *     iterations: number,
-     * }}
+     * }} State
      */
-    let state = {
+
+    /**
+     * @type {State}
+     */
+    const defaultState = {
         points: [],
         selectedPoint: null,
         selectedPointHistory: [],
@@ -245,8 +263,21 @@ window.addEventListener("load", () => {
         cameraPitchLocked: false,
         cameraFov: 70,
         cameraFovLocked: false,
+        padLeft: 0,
+        padLeftLocked: true,
+        padRight: 0,
+        padRightLocked: true,
+        padTop: 0,
+        padTopLocked: true,
+        padBottom: 0,
+        padBottomLocked: true,
         iterations: 1000,
     };
+
+    /**
+     * @type {State}
+     */
+    let state = JSON.parse(JSON.stringify(defaultState));
 
     /**
      * @typedef {{
@@ -1374,6 +1405,90 @@ window.addEventListener("load", () => {
     /**
      * @type {HTMLInputElement}
      */
+    const padLeftInput = document.getElementById("input-pad-left");
+    /**
+     * @type {HTMLInputElement}
+     */
+    const padLeftLockedInput = document.getElementById("input-pad-left-locked");
+
+    initCoordsInputs([ padLeftInput ], (values) => {
+        [ state.padLeft ] = values;
+
+        requestRedraw();
+    });
+    
+    padLeftLockedInput.addEventListener("change", (event) => {
+        state.padLeftLocked = padLeftLockedInput.checked;
+
+        requestRedraw();
+    });
+
+    /**
+     * @type {HTMLInputElement}
+     */
+    const padRightInput = document.getElementById("input-pad-right");
+    /**
+     * @type {HTMLInputElement}
+     */
+    const padRightLockedInput = document.getElementById("input-pad-right-locked");
+
+    initCoordsInputs([ padRightInput ], (values) => {
+        [ state.padRight ] = values;
+
+        requestRedraw();
+    });
+    
+    padRightLockedInput.addEventListener("change", (event) => {
+        state.padRightLocked = padRightLockedInput.checked;
+
+        requestRedraw();
+    });
+
+    /**
+     * @type {HTMLInputElement}
+     */
+    const padTopInput = document.getElementById("input-pad-top");
+    /**
+     * @type {HTMLInputElement}
+     */
+    const padTopLockedInput = document.getElementById("input-pad-top-locked");
+
+    initCoordsInputs([ padTopInput ], (values) => {
+        [ state.padTop ] = values;
+
+        requestRedraw();
+    });
+    
+    padTopLockedInput.addEventListener("change", (event) => {
+        state.padTopLocked = padTopLockedInput.checked;
+
+        requestRedraw();
+    });
+
+    /**
+     * @type {HTMLInputElement}
+     */
+    const padBottomInput = document.getElementById("input-pad-bottom");
+    /**
+     * @type {HTMLInputElement}
+     */
+    const padBottomLockedInput = document.getElementById("input-pad-bottom-locked");
+
+    initCoordsInputs([ padBottomInput ], (values) => {
+        [ state.padBottom ] = values;
+
+        requestRedraw();
+    });
+    
+    padBottomLockedInput.addEventListener("change", (event) => {
+        state.padBottomLocked = padBottomLockedInput.checked;
+
+        requestRedraw();
+    });
+
+    /**
+     * @type {HTMLInputElement}
+     */
     const cameraTpCopyInput = document.getElementById("input-camera-tp-copy");
     cameraTpCopyInput.addEventListener("click", (event) => {
         navigator.clipboard.writeText(`/tp @s ${state.cameraX} ${state.cameraY - 1.62} ${state.cameraZ} ${state.cameraYaw} ${state.cameraPitch}`);
@@ -1435,6 +1550,10 @@ window.addEventListener("load", () => {
             state.cameraYaw * (Math.PI / 180),
             state.cameraPitch * (Math.PI / 180),
             state.cameraFov * (Math.PI / 180),
+            state.padLeft,
+            state.padRight,
+            state.padTop,
+            state.padBottom,
         ];
         const maxSteps = [
             state.cameraXLocked ? 0 : 1,
@@ -1443,6 +1562,10 @@ window.addEventListener("load", () => {
             state.cameraYawLocked ? 0 : (Math.PI / 180),
             state.cameraPitchLocked ? 0 : (Math.PI / 180),
             state.cameraFovLocked ? 0 : (Math.PI / 180),
+            state.padLeftLocked ? 0 : 1,
+            state.padRightLocked ? 0 : 1,
+            state.padTopLocked ? 0 : 1,
+            state.padBottomLocked ? 0 : 1,
         ];
         const newVariables = reverseProjection(constants, startingVariables, maxSteps, worldPoints, projectedPoints, state.iterations);
         if (!state.cameraXLocked) state.cameraX = newVariables[0];
@@ -1451,6 +1574,10 @@ window.addEventListener("load", () => {
         if (!state.cameraYawLocked) state.cameraYaw = newVariables[3] / (Math.PI / 180);
         if (!state.cameraPitchLocked) state.cameraPitch = newVariables[4] / (Math.PI / 180);
         if (!state.cameraFovLocked) state.cameraFov = newVariables[5] / (Math.PI / 180);
+        if (!state.padLeftLocked) state.padLeft = newVariables[6];
+        if (!state.padRightLocked) state.padRight = newVariables[7];
+        if (!state.padTopLocked) state.padTop = newVariables[8];
+        if (!state.padBottomLocked) state.padBottom = newVariables[9];
 
         requestRedraw();
     });
@@ -1465,7 +1592,7 @@ window.addEventListener("load", () => {
 
         for (const key in state) {
             if (typeof newState[key] === "undefined") {
-                return;
+                newState[key] = JSON.parse(JSON.stringify(state[key]));
             }
         }
 
@@ -1934,6 +2061,16 @@ window.addEventListener("load", () => {
         cameraRotPitchLockedInput.checked = state.cameraPitchLocked;
         cameraFovLockedInput.checked = state.cameraFovLocked;
 
+        padLeftInput.value = state.padLeft;
+        padRightInput.value = state.padRight;
+        padTopInput.value = state.padTop;
+        padBottomInput.value = state.padBottom;
+
+        padLeftLockedInput.checked = state.padLeftLocked;
+        padRightLockedInput.checked = state.padRightLocked;
+        padTopLockedInput.checked = state.padTopLocked;
+        padBottomLockedInput.checked = state.padBottomLocked;
+
         iterationsInput.value = state.iterations;
 
         stateTextarea.innerText = JSON.stringify(state);
@@ -2041,7 +2178,7 @@ window.addEventListener("load", () => {
             drawPoint(centerPath, outlinePath, smallOutlinePath, outlineEdgePath, point.px, point.py, selected, small);
 
             if (state.showProjected) {
-                const [ ppx, ppy ] = project([ state.offsetBy01, loadedImage.width, loadedImage.height ], [ state.cameraX, state.cameraY, state.cameraZ, state.cameraYaw * (Math.PI / 180), state.cameraPitch * (Math.PI / 180), state.cameraFov * (Math.PI / 180) ], [ point.wx, point.wy, point.wz ]);
+                const [ ppx, ppy ] = project([ state.offsetBy01, loadedImage.width, loadedImage.height ], [ state.cameraX, state.cameraY, state.cameraZ, state.cameraYaw * (Math.PI / 180), state.cameraPitch * (Math.PI / 180), state.cameraFov * (Math.PI / 180), state.padLeft, state.padRight, state.padTop, state.padBottom ], [ point.wx, point.wy, point.wz ]);
                 drawPoint(projectedCenterPath, projectedOutlinePath, projectedSmallOutlinePath, outlineEdgePath, ppx, ppy, selected, small);
             }
         }
