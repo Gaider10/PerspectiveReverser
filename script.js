@@ -235,6 +235,9 @@ window.addEventListener("load", () => {
      *     padBottom: number,
      *     padBottomLocked: boolean,
      *     iterations: number,
+     *     moveWorldX: number,
+     *     moveWorldY: number,
+     *     moveWorldZ: number,
      * }} State
      */
 
@@ -272,6 +275,9 @@ window.addEventListener("load", () => {
         padBottom: 0,
         padBottomLocked: true,
         iterations: 1000,
+        moveWorldX: 0,
+        moveWorldY: 0,
+        moveWorldZ: 0,
     };
 
     /**
@@ -1583,6 +1589,50 @@ window.addEventListener("load", () => {
     });
 
     /**
+     * @type {HTMLInputElement}
+     */
+    const moveWorldXInput = document.getElementById("input-move-world-x");
+    /**
+     * @type {HTMLInputElement}
+     */
+    const moveWorldYInput = document.getElementById("input-move-world-y");
+    /**
+     * @type {HTMLInputElement}
+     */
+    const moveWorldZInput = document.getElementById("input-move-world-z");
+
+    initCoordsInputs([ moveWorldXInput, moveWorldYInput, moveWorldZInput ], (values) => {
+        [ state.moveWorldX, state.moveWorldY, state.moveWorldZ ] = values;
+        
+        requestRedraw();
+    });
+
+    /**
+     * @type {HTMLInputElement}
+     */
+    const moveWorldInput = document.getElementById("input-move-world");
+    moveWorldInput.addEventListener("click", (event) => {
+        const dx = state.moveWorldX;
+        const dy = state.moveWorldY;
+        const dz = state.moveWorldZ;
+
+        for (const point of state.points) {
+            point.wx += dx;
+            point.wy += dy;
+            point.wz += dz;
+        }
+        state.cameraX += dx;
+        state.cameraY += dy;
+        state.cameraZ += dz;
+
+        state.moveWorldX = 0;
+        state.moveWorldY = 0;
+        state.moveWorldZ = 0;
+        
+        requestRedraw();
+    });
+
+    /**
      * @type {HTMLTextAreaElement}
      */
     const stateTextarea = document.getElementById("textarea-state");
@@ -2072,6 +2122,10 @@ window.addEventListener("load", () => {
         padBottomLockedInput.checked = state.padBottomLocked;
 
         iterationsInput.value = state.iterations;
+
+        moveWorldXInput.value = state.moveWorldX;
+        moveWorldYInput.value = state.moveWorldY;
+        moveWorldZInput.value = state.moveWorldZ;
 
         stateTextarea.innerText = JSON.stringify(state);
 
