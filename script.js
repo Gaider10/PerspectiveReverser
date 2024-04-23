@@ -1951,7 +1951,7 @@ window.addEventListener("load", () => {
         event.preventDefault();
 
         const prevZoom = zoom;
-        zoomIndex = Math.min(Math.max(zoomIndex + Math.round(-event.deltaY / 100) * CONFIG.zoomIndexStep, CONFIG.zoomIndexMin), CONFIG.zoomIndexMax);
+        zoomIndex = Math.min(Math.max(zoomIndex + Math.sign(-event.deltaY) * CONFIG.zoomIndexStep, CONFIG.zoomIndexMin), CONFIG.zoomIndexMax);
         zoom = Math.pow(2, zoomIndex);
         centerX += (event.offsetX - canvas.clientWidth / 2) * (1 / prevZoom - 1 / zoom);
         centerY += (event.offsetY - canvas.clientHeight / 2) * (1 / prevZoom - 1 / zoom);
