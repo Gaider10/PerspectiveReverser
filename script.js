@@ -11,10 +11,10 @@ const CONFIG = {
 
 function project(constants, variables, worldPoint) {
     const [ offsetBy0_1, imageSizeX, imageSizeY ] = constants;
-    const [ x, y, z, yaw, pitch, fov, padLeft, padRight, padTop, padBottom ] = variables;
+    const [ x, y, z, yaw, pitch, fov, padV, offsetX, offsetY ] = variables;
 
-    const fullImageSizeX = imageSizeX + padLeft + padRight;
-    const fullImageSizeY = imageSizeY + padTop + padBottom;
+    const fullImageSizeX = imageSizeX;
+    const fullImageSizeY = imageSizeY + padV;
     
     const sinYaw = Math.sin(yaw);
     const cosYaw = Math.cos(yaw);
@@ -52,18 +52,18 @@ function project(constants, variables, worldPoint) {
     const w4 = -z3 + (offsetBy0_1 ? -0.1 : 0);
     
     const w4Inv = w4 === 0 ? 0 : 1 / w4;
-    const x5 = (x4 * w4Inv + 1) * (fullImageSizeX * 0.5) - padLeft;
-    const y5 = (y4 * w4Inv + 1) * (fullImageSizeY * 0.5) - padTop;
+    const x5 = (x4 * w4Inv + 1) * (fullImageSizeX * 0.5) + offsetX;
+    const y5 = (y4 * w4Inv + 1) * (fullImageSizeY * 0.5) - (padV / 2 - offsetY);
 
     return [ x5, y5 ];
 }
 
 function projectedError(constants, variables, worldPoints, projectedPoints) {
     const [ offsetBy0_1, imageSizeX, imageSizeY ] = constants;
-    const [ x, y, z, yaw, pitch, fov, padLeft, padRight, padTop, padBottom ] = variables;
+    const [ x, y, z, yaw, pitch, fov, padV, offsetX, offsetY ] = variables;
 
-    const fullImageSizeX = imageSizeX + padLeft + padRight;
-    const fullImageSizeY = imageSizeY + padTop + padBottom;
+    const fullImageSizeX = imageSizeX;
+    const fullImageSizeY = imageSizeY + padV;
     
     const sinYaw = Math.sin(yaw);
     const cosYaw = Math.cos(yaw);
@@ -104,8 +104,8 @@ function projectedError(constants, variables, worldPoints, projectedPoints) {
         const w4 = -z3 + (offsetBy0_1 ? -0.1 : 0);
 
         const w4Inv = w4 === 0 ? 0 : 1 / w4;
-        const x5 = (x4 * w4Inv + 1) * (fullImageSizeX * 0.5) - padLeft;
-        const y5 = (y4 * w4Inv + 1) * (fullImageSizeY * 0.5) - padTop;
+        const x5 = (x4 * w4Inv + 1) * (fullImageSizeX * 0.5) + offsetX;
+        const y5 = (y4 * w4Inv + 1) * (fullImageSizeY * 0.5) - (padV / 2 - offsetY);
 
         const [ px, py ] = projectedPoints[i];
 
@@ -1556,10 +1556,9 @@ window.addEventListener("load", () => {
             state.cameraYaw * (Math.PI / 180),
             state.cameraPitch * (Math.PI / 180),
             state.cameraFov * (Math.PI / 180),
-            state.padLeft,
-            state.padRight,
-            state.padTop,
-            state.padBottom,
+            state.padTop + state.padBottom,
+            (state.padRight - state.padLeft) / 2,
+            (state.padBottom - state.padTop) / 2,
         ];
         const maxSteps = [
             state.cameraXLocked ? 0 : 1,
@@ -1568,22 +1567,22 @@ window.addEventListener("load", () => {
             state.cameraYawLocked ? 0 : (Math.PI / 180),
             state.cameraPitchLocked ? 0 : (Math.PI / 180),
             state.cameraFovLocked ? 0 : (Math.PI / 180),
-            state.padLeftLocked ? 0 : 1,
-            state.padRightLocked ? 0 : 1,
-            state.padTopLocked ? 0 : 1,
-            state.padBottomLocked ? 0 : 1,
+            state.padTopLocked || state.padBottomLocked ? 0 : 1,
+            state.padLeftLocked && state.padRightLocked ? 0 : 1,
+            state.padTopLocked || state.padBottomLocked ? 0 : 1,
         ];
-        const newVariables = reverseProjection(constants, startingVariables, maxSteps, worldPoints, projectedPoints, state.iterations);
-        if (!state.cameraXLocked) state.cameraX = newVariables[0];
-        if (!state.cameraYLocked) state.cameraY = newVariables[1];
-        if (!state.cameraZLocked) state.cameraZ = newVariables[2];
-        if (!state.cameraYawLocked) state.cameraYaw = newVariables[3] / (Math.PI / 180);
-        if (!state.cameraPitchLocked) state.cameraPitch = newVariables[4] / (Math.PI / 180);
-        if (!state.cameraFovLocked) state.cameraFov = newVariables[5] / (Math.PI / 180);
-        if (!state.padLeftLocked) state.padLeft = newVariables[6];
-        if (!state.padRightLocked) state.padRight = newVariables[7];
-        if (!state.padTopLocked) state.padTop = newVariables[8];
-        if (!state.padBottomLocked) state.padBottom = newVariables[9];
+        const [ x, y, z, yaw, pitch, fov, padV, offsetX, offsetY ] = reverseProjection(constants, startingVariables, maxSteps, worldPoints, projectedPoints, state.iterations);
+        if (!state.cameraXLocked) state.cameraX = x;
+        if (!state.cameraYLocked) state.cameraY = y;
+        if (!state.cameraZLocked) state.cameraZ = z;
+        if (!state.cameraYawLocked) state.cameraYaw = yaw / (Math.PI / 180);
+        if (!state.cameraPitchLocked) state.cameraPitch = pitch / (Math.PI / 180);
+        if (!state.cameraFovLocked) state.cameraFov = fov / (Math.PI / 180);
+        const padH = state.padLeftLocked ? 2 * (state.padLeft + offsetX) : state.padRightLocked ? 2 * (state.padRight - offsetX) : Math.abs(offsetX * 2);
+        if (!state.padLeftLocked) state.padLeft = padH / 2 - offsetX;
+        if (!state.padRightLocked) state.padRight = padH / 2 + offsetX;
+        if (!state.padTopLocked) state.padTop = padV / 2 - offsetY;
+        if (!state.padBottomLocked) state.padBottom = padV / 2 + offsetY;
 
         requestRedraw();
     });
@@ -2232,7 +2231,7 @@ window.addEventListener("load", () => {
             drawPoint(centerPath, outlinePath, smallOutlinePath, outlineEdgePath, point.px, point.py, selected, small);
 
             if (state.showProjected) {
-                const [ ppx, ppy ] = project([ state.offsetBy01, loadedImage.width, loadedImage.height ], [ state.cameraX, state.cameraY, state.cameraZ, state.cameraYaw * (Math.PI / 180), state.cameraPitch * (Math.PI / 180), state.cameraFov * (Math.PI / 180), state.padLeft, state.padRight, state.padTop, state.padBottom ], [ point.wx, point.wy, point.wz ]);
+                const [ ppx, ppy ] = project([ state.offsetBy01, loadedImage.width, loadedImage.height ], [ state.cameraX, state.cameraY, state.cameraZ, state.cameraYaw * (Math.PI / 180), state.cameraPitch * (Math.PI / 180), state.cameraFov * (Math.PI / 180), state.padTop + state.padBottom, (state.padRight - state.padLeft) / 2, (state.padBottom - state.padTop) / 2 ], [ point.wx, point.wy, point.wz ]);
                 drawPoint(projectedCenterPath, projectedOutlinePath, projectedSmallOutlinePath, outlineEdgePath, ppx, ppy, selected, small);
             }
         }
