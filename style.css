@@ -5,6 +5,9 @@
 body {
     width: fit-content;
     margin: auto;
+    padding: 16px;
+    max-width: 100%;
+    box-sizing: border-box;
 }
 
 /* #select-point, #input-projected-pos-x, #input-projected-pos-y, #input-world-pos-x, #input-world-pos-y, #input-world-pos-z {
@@ -15,12 +18,40 @@ input[type=number], select {
     width: 80px;
 }
 
-#canvas {
+.frames {
+    display: flex;
+    column-gap: 16px;
+    overflow-x: scroll;
+}
+
+.frame {
+    display: flex;
+    flex-direction: column;
+}
+
+.frame-footer {
+    display: flex;
+    justify-content: center;
+    column-gap: 8px;
+}
+
+.frame-footer > button {
+    width: 64px;
+}
+
+.frame-canvas {
     width: 600px;
     height: 400px;
     background: black;
     image-rendering: pixelated;
     outline: none;
+}
+
+.add-frame-div {
+    display: flex;
+    align-items: center;
+    height: 400px;
+    align-self: flex-end;
 }
 
 /* #canvas-error {
@@ -58,4 +89,11 @@ input[type=number], select {
 #textarea-state {
     width: 600px;
     height: 200px;
+    box-sizing: border-box;
+}
+
+#textarea-tomdata {
+    width: 600px;
+    height: 200px;
+    box-sizing: border-box;
 }

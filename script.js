@@ -174,9 +174,18 @@ async function loadImage(url) {
 
 window.addEventListener("load", () => {
     /**
-     * @type {HTMLImageElement | null}
+     * @type {{
+     *   imageNameLabel: HTMLLabelElement,
+     *   moveLeftButton: HTMLButtonElement,
+     *   moveRightButton: HTMLButtonElement,
+     *   canvas: HTMLCanvasElement,
+     *   context: CanvasRenderingContext2D,
+     *   image: HTMLImageElement,
+     *   offscreenCanvas: OffscreenCanvas,
+     *   offscreenContext: OffscreenCanvasRenderingContext2D,
+     * }[]}
      */
-    let loadedImage = null;
+    const frames = [];
 
     /**
      * @typedef {{
@@ -205,11 +214,15 @@ window.addEventListener("load", () => {
 
     /**
      * @typedef {{
-     *     points: Point[],
-     *     selectedPoint: number | null,
-     *     selectedPointHistory: number[],
-     *     lines: Line[],
-     *     selectedLine: number | null,
+     *     frames: {
+     *         name: string,
+     *         points: Point[],
+     *         lines: Line[],
+     *     }[],
+     *     selectedPoint: [number, number] | null,
+     *     selectedPointHistory: [number, number][],
+     *     selectedLine: [number, number] | null,
+     *     brightness: number,
      *     showGrid: boolean,
      *     showBlur: boolean,
      *     showProjected: boolean,
@@ -245,11 +258,11 @@ window.addEventListener("load", () => {
      * @type {State}
      */
     const defaultState = {
-        points: [],
+        frames: [],
         selectedPoint: null,
         selectedPointHistory: [],
-        lines: [],
         selectedLine: null,
+        brightness: 1,
         showGrid: false,
         showBlur: false,
         showProjected: false,
@@ -293,27 +306,583 @@ window.addEventListener("load", () => {
      */
 
     /**
-     * @type {(LineData | null)[]}
+     * @type {(LineData | null)[][]}
      */
     let linesData = [];
 
+    let centerX = 0;
+    let centerY = 0;
+    let zoomIndex = 0;
+    let zoom = 1;
+    
+    /**
+     * @type {HTMLDivElement}
+     */
+    const divFrames = document.getElementById("frames");
+
+    const canvasClientWidth = 600;
+    const canvasClientHeight = 400;
+
+    let imageWidth = null;
+    let imageHeight = null;
+
     /**
      * 
-     * @param {HTMLImageElement} image 
+     * @param {any[]} arr 
+     * @param {number} i 
+     * @param {number} j 
      */
-    function setLoadedImage(image) {
-        loadedImage = image;
+    function swap(arr, i, j) {
+        const tmp = arr[i];
+        arr[i] = arr[j];
+        arr[j] = tmp;
+    }
+
+    /**
+     * 
+     * @param {number} num 
+     * @param {number} i 
+     * @param {number} j 
+     * @returns {number}
+     */
+    function swapIndex(num, i, j) {
+        if (num === i) return j;
+        if (num === j) return i;
+        return num;
+    }
+
+    /**
+     * 
+     * @param {number} frameIndex 
+     */
+    function updateFrameButtons(frameIndex) {
+        const frame = frames[frameIndex];
+        frame.moveLeftButton.disabled = frameIndex === 0;
+        frame.moveRightButton.disabled = frameIndex === divFrames.children.length - 2;
+    }
+
+    /**
+     * 
+     */
+    function addFrame() {
+        const frameDiv = document.createElement("div");
+        frameDiv.classList.add("frame");
+        const frameImageDiv = document.createElement("div");
+        const frameImageLabel = document.createElement("label");
+        frameImageLabel.innerText = "Frame image:";
+        frameImageDiv.appendChild(frameImageLabel);
+        frameImageDiv.appendChild(new Text(" "));
+        const chooseImageButton = document.createElement("button");
+        chooseImageButton.innerText = "Choose image";
+        chooseImageButton.addEventListener("click", () => {
+            imageInput.click();
+        });
+        frameImageDiv.appendChild(chooseImageButton);
+        frameImageDiv.appendChild(new Text(" "));
+        const imageNameLabel = document.createElement("label");
+        frameImageDiv.appendChild(imageNameLabel);
+        const imageInput = document.createElement("input");
+        imageInput.type = "file";
+        imageInput.style.display = "none";
+        imageInput.addEventListener("change", () => {
+            if (imageInput.files.length === 0) return;
+    
+            const file = imageInput.files.item(0);
+            const url = URL.createObjectURL(file);
+            
+            loadImage(url).then((image) => {
+                const frameIndex = frames.indexOf(frame);
+                if (setFrameImage(frameIndex, image, file.name)) {
+                    requestRedraw();
+                } else {
+                    alert("All frames must have the same resolution");
+                }
+            }).catch(() => {
+                alert("Failed loading image");
+            }).finally(() => {
+                URL.revokeObjectURL(url);
+            });
+
+            imageInput.value = "";
+        });
+        frameImageDiv.appendChild(imageInput);
+        frameDiv.appendChild(frameImageDiv);
+        const canvas = document.createElement("canvas");
+        canvas.classList.add("frame-canvas");
+        frameDiv.appendChild(canvas);
+        const frameFooterDiv = document.createElement("div");
+        frameFooterDiv.classList.add("frame-footer");
+        const moveLeftButton = document.createElement("button")
+        moveLeftButton.innerText = "<";
+        moveLeftButton.addEventListener("click", () => {
+            moveFrame(frames.indexOf(frame), false);
+        });
+        frameFooterDiv.appendChild(moveLeftButton);
+        const removeButton = document.createElement("button")
+        removeButton.innerText = "X";
+        removeButton.addEventListener("click", () => {
+            removeFrame(frames.indexOf(frame));
+        });
+        frameFooterDiv.appendChild(removeButton);
+        const moveRightButton = document.createElement("button")
+        moveRightButton.innerText = ">";
+        moveRightButton.addEventListener("click", () => {
+            moveFrame(frames.indexOf(frame), true);
+        });
+        frameFooterDiv.appendChild(moveRightButton);
+        frameDiv.appendChild(frameFooterDiv);
+        divFrames.insertBefore(frameDiv, divFrames.children[divFrames.children.length - 1]);
+
+        canvas.tabIndex = -1;
+
+        const context = canvas.getContext("2d");
+
+        const offscreenCanvas = new OffscreenCanvas(0, 0);
+        const offscreenContext = offscreenCanvas.getContext("2d", { willReadFrequently: true });
+        
+        const frame = {
+            imageNameLabel,
+            moveLeftButton,
+            moveRightButton,
+            canvas,
+            context,
+            image: null,
+            offscreenCanvas,
+            offscreenContext,
+        };
+        frames.push(frame);
+
+        state.frames.push({
+            name: "",
+            points: [],
+            lines: [],
+        });
+        linesData.push([]);
+
+        divFrames.scrollTo(divFrames.scrollWidth, 0);
+
+        const frameIndex = frames.length - 1;
+        updateFrameButtons(frameIndex);
+        if (frameIndex !== 0) updateFrameButtons(frameIndex - 1);
+        
+        let prevMouseDownPos = null;
+        let prevMouseUpPos = null;
+        let mouseDragging = false;
+        let draggedPointIndex = null;
+        let draggedPointOffsetX = 0;
+        let draggedPointOffsetY = 0;
+        let doubleClickStartTime = 0;
+
+        canvas.addEventListener("mousedown", (event) => {
+            if (frame.image === null) return;
+            
+            event.preventDefault();
+            
+            canvas.focus();
+
+            if (prevMouseDownPos !== null) return;
+
+            const frameIndex = frames.indexOf(frame);
+
+            if (!event.shiftKey && Date.now() - doubleClickStartTime <= CONFIG.doubleClickDelay && prevMouseUpPos !== null) {
+                const dx = event.offsetX - prevMouseUpPos.x;
+                const dy = event.offsetY - prevMouseUpPos.y;
+                const dsq = dx * dx + dy * dy;
+                if (dsq <= CONFIG.mouseDragMin * CONFIG.mouseDragMin) {
+                    const px = roundTo(roundTo((event.offsetX - canvas.clientWidth / 2) / zoom + centerX, zoom), 1000);
+                    const py = roundTo(roundTo((event.offsetY - canvas.clientHeight / 2) / zoom + centerY, zoom), 1000);
+
+                    let wx = 0;
+                    let wy = 0;
+                    let wz = 0;
+                    if (state.selectedPointHistory.length !== 0) {
+                        const lastSelectedPoint = state.selectedPointHistory[state.selectedPointHistory.length - 1];
+                        const point = state.frames[lastSelectedPoint[0]].points[lastSelectedPoint[1]];
+                        wx = point.wx;
+                        wy = point.wy;
+                        wz = point.wz;
+                    }
+
+                    if (selectLine(null)) {
+                        selectPoint(frameIndex, createPoint(frameIndex, wx, wy, wz, px, py));
+
+                        requestRedraw();
+                    }
+                }
+            }
+
+            draggedPointIndex = null;
+
+            let minDsq = Number.MAX_VALUE;
+
+            for (let pointIndex = 0; pointIndex < state.frames[frameIndex].points.length; pointIndex++) {
+                const canBeDragged =
+                    (state.selectedPoint !== null && state.selectedPoint[0] === frameIndex && state.selectedPoint[1] === pointIndex) ||
+                    (state.selectedLine !== null && state.selectedLine[0] === frameIndex && state.frames[state.selectedLine[0]].lines[state.selectedLine[1]].points.includes(pointIndex));
+                if (!canBeDragged) continue;
+
+                const px = (event.offsetX - canvas.clientWidth / 2) / zoom + centerX;
+                const py = (event.offsetY - canvas.clientHeight / 2) / zoom + centerY;
+
+                const point = state.frames[frameIndex].points[pointIndex];
+
+                const dx = (point.px - px) * zoom;
+                const dy = (point.py - py) * zoom;
+                const dsq = dx * dx + dy * dy;
+
+                if (dsq < CONFIG.pointOuterRadius * CONFIG.pointOuterRadius && dsq < minDsq) {
+                    minDsq = dsq;
+                    draggedPointIndex = pointIndex;
+                    draggedPointOffsetX = dx;
+                    draggedPointOffsetY = dy;
+                }
+            }
+
+            prevMouseDownPos = {
+                x: event.offsetX,
+                y: event.offsetY,
+            };
+            doubleClickStartTime = Date.now();
+        });
+
+        canvas.addEventListener("contextmenu", (event) => {
+            event.preventDefault();
+        });
+
+        window.addEventListener("mouseup", (event) => {
+            if (frame.image === null) return;
+            
+            if (prevMouseDownPos === null) return;
+
+            if (!mouseDragging) {
+                const frameIndex = frames.indexOf(frame);
+                
+                const px = (event.offsetX - canvas.clientWidth / 2) / zoom + centerX;
+                const py = (event.offsetY - canvas.clientHeight / 2) / zoom + centerY;
+                
+                let minPointDistSq = Number.MAX_VALUE;
+                let clickedPointIndex = null;
+                
+                for (let pointIndex = 0; pointIndex < state.frames[frameIndex].points.length; pointIndex++) {
+                    const point = state.frames[frameIndex].points[pointIndex];
+                    let radius;
+                    if (state.selectedPoint !== null && state.selectedPoint[0] === frameIndex && state.selectedPoint[1] === pointIndex) {
+                        radius = CONFIG.pointOuterRadius;
+                    } else if (state.selectedLine !== null && state.selectedLine[0] === frameIndex && state.frames[state.selectedLine[0]].lines[state.selectedLine[1]].points.includes(pointIndex)) {
+                        radius = CONFIG.pointOuterRadius - (CONFIG.pointOuterRadius - CONFIG.pointInnerRadius) / 2;
+                    } else {
+                        radius = CONFIG.pointInnerRadius + CONFIG.pointEdgeWidth;
+                    }
+
+                    const dx = (point.px - px) * zoom;
+                    const dy = (point.py - py) * zoom;
+                    const dsq = dx * dx + dy * dy;
+                    
+                    if (dsq <= radius * radius && dsq < minPointDistSq) {
+                        minPointDistSq = dsq;
+                        clickedPointIndex = pointIndex;
+                    }
+                }
+
+                if (clickedPointIndex !== null) {
+                    if (event.shiftKey) {
+                        selectPoint(null);
+
+                        if (state.selectedLine === null) {
+                            selectLine(frameIndex, createLine());
+                        }
+
+                        toggleLinePoint(frameIndex, state.selectedLine, clickedPointIndex);
+                    } else {
+                        if (selectLine(null)) {
+                            selectPoint(frameIndex, clickedPointIndex);
+                        }
+                    }
+                } else {
+                    let minLineDist = Number.MAX_VALUE;
+                    let clickedLineIndex = null;
+
+                    for (let lineIndex = 0; lineIndex < state.frames[frameIndex].lines.length; lineIndex++) {
+                        const abc = calculateBestLineABCNorm(frameIndex, lineIndex);
+                        if (abc === null) continue;
+
+                        const lineDist = Math.abs(abc.a * px + abc.b * py + abc.c);
+                        if (lineDist < 5 / zoom && lineDist < minLineDist) {
+                            minLineDist = lineDist;
+                            clickedLineIndex = lineIndex;
+                        }
+                    }
+
+                    if (clickedLineIndex !== null && !event.shiftKey) {
+                        if (selectLine(frameIndex, clickedLineIndex)) {
+                            selectPoint(null);
+                        }
+                    } else {
+                        if (event.shiftKey) {
+                            const pixelPx = Math.floor((event.offsetX - canvas.clientWidth / 2) / zoom + roundPx(centerX));
+                            const pixelPy = Math.floor((event.offsetY - canvas.clientHeight / 2) / zoom + roundPx(centerY));
+            
+                            selectPoint(null);
+
+                            if (state.selectedLine === null) {
+                                selectLine(frameIndex, createLine());
+                            }
+
+                            toggleLinePixel(state.selectedLine[0], state.selectedLine[1], pixelPx, pixelPy);
+                        } else {
+                            selectPoint(null);
+                            selectLine(null);
+                        }
+                    }
+                }
+
+                requestRedraw();
+            }
+
+            prevMouseDownPos = null;
+            prevMouseUpPos = {
+                x: event.offsetX,
+                y: event.offsetY,
+            };
+            mouseDragging = false;
+            draggedPointIndex = null;
+        });
+
+        canvas.addEventListener("mousemove", (event) => {
+            if (frame.image === null) return;
+
+            event.preventDefault();
+
+            if (!mouseDragging && prevMouseDownPos !== null) {
+                const dx = event.offsetX - prevMouseDownPos.x;
+                const dy = event.offsetY - prevMouseDownPos.y;
+                const dsq = dx * dx + dy * dy;
+
+                if (dsq > CONFIG.mouseDragMin * CONFIG.mouseDragMin) {
+                    mouseDragging = true;
+                    doubleClickStartTime = 0;
+                }
+            }
+
+            if (mouseDragging) {
+                const dx = event.offsetX - prevMouseDownPos.x;
+                const dy = event.offsetY - prevMouseDownPos.y;
+
+                if (draggedPointIndex !== null) {
+                    const px = roundTo(roundTo((event.offsetX + draggedPointOffsetX - canvas.clientWidth / 2) / zoom + centerX, zoom), 1000);
+                    const py = roundTo(roundTo((event.offsetY + draggedPointOffsetY - canvas.clientHeight / 2) / zoom + centerY, zoom), 1000);
+
+                    const frameIndex = frames.indexOf(frame);
+                    movePointProjected(frameIndex, draggedPointIndex, px, py);
+                } else {
+                    centerX -= dx / zoom;
+                    centerY -= dy / zoom;
+                }
+                
+                prevMouseDownPos = {
+                    x: event.offsetX,
+                    y: event.offsetY,
+                };
+
+                requestRedraw();
+            }
+        });
+
+        canvas.addEventListener("wheel", (event) => {
+            if (event.shiftKey) return;
+
+            if (frame.image === null) return;
+            
+            event.preventDefault();
+
+            const frameIndex = frames.indexOf(frame);
+
+            const prevZoom = zoom;
+            zoomIndex = Math.min(Math.max(zoomIndex + Math.sign(-event.deltaY) * CONFIG.zoomIndexStep, CONFIG.zoomIndexMin), CONFIG.zoomIndexMax);
+            zoom = Math.pow(2, zoomIndex);
+            centerX += (event.offsetX - canvas.clientWidth / 2) * (1 / prevZoom - 1 / zoom);
+            centerY += (event.offsetY - canvas.clientHeight / 2) * (1 / prevZoom - 1 / zoom);
+            if (mouseDragging && draggedPointIndex !== null) {
+                const px = roundTo(roundTo((event.offsetX + draggedPointOffsetX - canvas.clientWidth / 2) / zoom + centerX, zoom), 1000);
+                const py = roundTo(roundTo((event.offsetY + draggedPointOffsetY - canvas.clientHeight / 2) / zoom + centerY, zoom), 1000);
+
+                movePointProjected(frameIndex, draggedPointIndex, px, py);
+            }
+            
+            requestRedraw();
+        }, {
+            passive: false,
+        });
+
+        canvas.addEventListener("keydown", (event) => {
+            if (frame.image !== null)  {
+                if (state.selectedPoint !== null || state.selectedLine !== null) {
+                    if (event.key === "Backspace" || event.key === "Delete") {
+                        event.preventDefault();
+        
+                        if (state.selectedPoint !== null) {
+                            removePoint(state.selectedPoint[0], state.selectedPoint[1]);
+                        } else {
+                            removeLine(state.selectedLine[0], state.selectedLine[1]);
+                        }
+        
+                        requestRedraw();
+                    }
+                }
+
+                if (state.selectedPoint !== null) {
+                    for (const [key, dsx, dsy] of [["ArrowDown", 0, 1], ["ArrowUp", 0, -1], ["ArrowRight", 1, 0], ["ArrowLeft", -1, 0]]) {
+                        if (event.key === key) {
+                            event.preventDefault();
+        
+                            const point = state.frames[state.selectedPoint[0]].points[state.selectedPoint[1]];
+        
+                            const px = roundTo(roundTo(point.px + dsx / zoom, zoom), 1000);
+                            const py = roundTo(roundTo(point.py + dsy / zoom, zoom), 1000);
+        
+                            movePointProjected(state.selectedPoint[0], state.selectedPoint[1], px, py);
+        
+                            requestRedraw();
+                        }
+                    }
+                }
+            }
+        });
+    }
+
+    addFrame();
+
+    /**
+     * 
+     * @param {number} frameIndex 
+     * @param {boolean} right 
+     */
+    function moveFrame(frameIndex, right) {
+        if (frameIndex === 0 && !right || frameIndex === divFrames.children.length - 1 && right) return;
+
+        divFrames.insertBefore(divFrames.children[frameIndex], divFrames.children[right ? frameIndex + 2 : frameIndex - 1]);
+
+        const otherFrameIndex = right ? frameIndex + 1 : frameIndex - 1;
+
+        swap(frames, frameIndex, otherFrameIndex);
+
+        updateFrameButtons(frameIndex);
+        updateFrameButtons(otherFrameIndex);
+
+        swap(state.frames, frameIndex, otherFrameIndex);
+        if (state.selectedPoint !== null) {
+            state.selectedPoint[0] = swapIndex(state.selectedPoint[0], frameIndex, otherFrameIndex);
+        }
+        for (const point of state.selectedPointHistory) {
+            point[0] = swapIndex(point[0], frameIndex, otherFrameIndex);
+        }
+        if (state.selectedLine !== null) {
+            state.selectedLine[0] = swapIndex(state.selectedLine[0], frameIndex, otherFrameIndex);
+        }
+        swap(linesData, frameIndex, otherFrameIndex);
+    }
+
+    /**
+     * 
+     * @param {number} frameIndex 
+     */
+    function removeFrame(frameIndex) {
+        divFrames.removeChild(divFrames.children[frameIndex]);
+        frames.splice(frameIndex, 1);
+        if (frames.length !== 0) {
+            updateFrameButtons(0);
+            updateFrameButtons(frames.length - 1);
+        }
+
+        for (let pointIndex = state.frames[frameIndex].points.length - 1; pointIndex >= 0; pointIndex--) {
+            removePoint(frameIndex, pointIndex);
+        }
+        for (let lineIndex = state.frames[frameIndex].lines.length - 1; lineIndex >= 0; lineIndex--) {
+            removeLine(frameIndex, lineIndex);
+        }
+        state.frames.splice(frameIndex, 1);
+        linesData.splice(frameIndex, 1);
+    }
+
+    /**
+     * 
+     * @param {number} frameIndex 
+     * @param {HTMLImageElement} image 
+     * @param {string} name 
+     * @returns {boolean}
+     */
+    function setFrameImage(frameIndex, image, name) {
+        if (image !== null) {
+            for (let i = 0; i < frames.length; i++) {
+                if (i == frameIndex) continue;
+    
+                if (frames[i].image === null) continue;
+    
+                if (frames[i].image.width !== image.width || frames[i].image.height !== image.height) {
+                    return false;
+                }
+            }
+        }
+
+        frames[frameIndex].image = image;
+        
+        state.frames[frameIndex].name = name;
+
+        const prevImageWidth = imageWidth;
+        const prevImageHeight = imageHeight;
+
+        imageWidth = null;
+        imageHeight = null;
+        for (let i = 0; i < frames.length; i++) {
+            if (frames[i].image !== null) {
+                imageWidth = frames[i].image.width;
+                imageHeight = frames[i].image.height;
+                break;
+            }
+        }
+
+        if (imageWidth !== null && (prevImageWidth !== imageWidth || prevImageHeight !== imageHeight)) {
+            centerX = imageWidth / 2;
+            centerY = imageHeight / 2;
+            zoomIndex = Math.min(Math.max(-Math.ceil(Math.log2(Math.max(imageWidth / canvasClientWidth, imageHeight / canvasClientHeight)) * 2) / 2, CONFIG.zoomIndexMin), CONFIG.zoomIndexMax);
+            zoom = Math.pow(2, zoomIndex);
+        }
 
         if (image !== null) {
-            centerX = loadedImage.width / 2;
-            centerY = loadedImage.height / 2;
-            zoomIndex = Math.min(Math.max(-Math.ceil(Math.log2(Math.max(loadedImage.width / canvas.clientWidth, loadedImage.height / canvas.clientHeight)) * 2) / 2, CONFIG.zoomIndexMin), CONFIG.zoomIndexMax);
-            zoom = Math.pow(2, zoomIndex);
+            updateFrameBrightness(frameIndex);
+        }
+
+        return true;
+    }
+
+    function updateFrameBrightness(frameIndex) {
+        const frame = frames[frameIndex];
+
+        if (frame.image === null) return;
+
+        frame.offscreenCanvas.width = imageWidth;
+        frame.offscreenCanvas.height = imageHeight;
+        frame.offscreenContext.drawImage(frame.image, 0, 0);
+        const imageData = frame.offscreenContext.getImageData(0, 0, imageWidth, imageHeight);
+        if (state.brightness !== 1) {
+            for (let i = 0; i < imageWidth * imageHeight; i++) {
+                for (let j = 0; j < 3; j++) {
+                    imageData.data[i * 4 + j] = Math.min(imageData.data[i * 4 + j] * state.brightness, 255);
+                }
+            }
+        }
+        frame.offscreenContext.putImageData(imageData, 0, 0);
+    }
+
+    function updateBrightness() {
+        for (let i = 0; i < frames.length; i++) {
+            updateFrameBrightness(i);
         }
     }
 
     /**
      * 
+     * @param {number} frameIndex 
      * @param {number} wx 
      * @param {number} wy 
      * @param {number} wz 
@@ -321,8 +890,8 @@ window.addEventListener("load", () => {
      * @param {number} py 
      * @returns {number}
      */
-    function createPoint(wx, wy, wz, px, py) {
-        state.points.push({
+    function createPoint(frameIndex, wx, wy, wz, px, py) {
+        state.frames[frameIndex].points.push({
             wx: wx,
             wy: wy,
             wz: wz,
@@ -330,31 +899,36 @@ window.addEventListener("load", () => {
             py: py,
         });
 
-        return state.points.length - 1;
+        return state.frames[frameIndex].points.length - 1;
     }
 
     /**
      * 
+     * @param {number} frameIndex 
      * @param {number} pointIndex 
      */
-    function removePoint(pointIndex) {
-        state.points.splice(pointIndex, 1);
+    function removePoint(frameIndex, pointIndex) {
+        state.frames[frameIndex].points.splice(pointIndex, 1);
         
-        if (state.selectedPoint === pointIndex) {
-            selectPoint(null);
-        } else if (state.selectedPoint > pointIndex) {
-            state.selectedPoint -= 1;
-        }
-
-        for (let i = state.selectedPointHistory.length - 1; i >= 0; i--) {
-            if (state.selectedPointHistory[i] === pointIndex) {
-                state.selectedPointHistory.splice(i, 1);
-            } else if (state.selectedPointHistory[i] > pointIndex) {
-                state.selectedPointHistory[i] -= 1;
+        if (state.selectedPoint !== null) {
+            if (state.selectedPoint[0] === frameIndex && state.selectedPoint[1] === pointIndex) {
+                selectPoint(null);
+            } else if (state.selectedPoint[1] > pointIndex) {
+                state.selectedPoint[1] -= 1;
             }
         }
 
-        for (const line of state.lines) {
+        for (let i = state.selectedPointHistory.length - 1; i >= 0; i--) {
+            if (state.selectedPointHistory[i][0] !== frameIndex) continue;
+
+            if (state.selectedPointHistory[i][1] === pointIndex) {
+                state.selectedPointHistory.splice(i, 1);
+            } else if (state.selectedPointHistory[i][1] > pointIndex) {
+                state.selectedPointHistory[i][1] -= 1;
+            }
+        }
+
+        for (const line of state.frames[frameIndex].lines) {
             const i = line.points.indexOf(pointIndex);
             if (i !== -1) {
                 line.points.splice(i, 1);
@@ -366,31 +940,35 @@ window.addEventListener("load", () => {
     
     /**
      * 
+     * @param {number | null} frameIndex 
      * @param {number | null} pointIndex 
     */
-   function selectPoint(pointIndex) {
-        if (state.selectedPoint === pointIndex) return;
+   function selectPoint(frameIndex, pointIndex) {
+        const isNull = frameIndex === null || frameIndex === null;
+        if (state.selectedPoint === null ? isNull : state.selectedPoint[0] === frameIndex && state.selectedPoint[1] === pointIndex) return;
 
-        state.selectedPoint = pointIndex;
+        state.selectedPoint = isNull ? null : [frameIndex, pointIndex];
         
-        if (pointIndex !== null) {
-            const i = state.selectedPointHistory.indexOf(pointIndex);
+        if (!isNull) {
+            const i = state.selectedPointHistory.findIndex((point) => point[0] === frameIndex && point[1] === pointIndex);
             if (i !== -1) state.selectedPointHistory.splice(i, 1);
-            state.selectedPointHistory.push(pointIndex);
+            state.selectedPointHistory.push([frameIndex, pointIndex]);
         }
 
+        // TODO:
         draggedPointIndex = null;
     }
 
     /**
      * 
+     * @param {number} frameIndex 
      * @param {number} pointIndex 
      * @param {number} wx 
      * @param {number} wy 
      * @param {number} wz 
      */
-    function movePointWorld(pointIndex, wx, wy, wz) {
-        const point = state.points[pointIndex];
+    function movePointWorld(frameIndex, pointIndex, wx, wy, wz) {
+        const point = state.frames[frameIndex].points[pointIndex];
         point.wx = wx;
         point.wy = wy;
         point.wz = wz;
@@ -398,45 +976,48 @@ window.addEventListener("load", () => {
 
     /**
      * 
+     * @param {number} frameIndex 
      * @param {number} pointIndex 
      * @param {number} px 
      * @param {number} py 
      */
-    function movePointProjected(pointIndex, px, py) {
-        const point = state.points[pointIndex];
+    function movePointProjected(frameIndex, pointIndex, px, py) {
+        const point = state.frames[frameIndex].points[pointIndex];
         point.px = px;
         point.py = py;
     }
 
     /**
      * 
+     * @param {number} frameIndex 
      * @returns {number}
      */
-    function createLine() {
-        state.lines.push({
+    function createLine(frameIndex) {
+        state.frames[frameIndex].lines.push({
             points: [],
             pixels: [],
         });
 
-        linesData.push(null);
+        linesData[frameIndex].push(null);
 
-        return state.lines.length - 1;
+        return state.frames[frameIndex].lines.length - 1;
     }
 
     /**
      * 
+     * @param {number} frameIndex 
      * @param {number} lineIndex 
      */
-    function removeLine(lineIndex) {
-        state.lines.splice(lineIndex, 1);
+    function removeLine(frameIndex, lineIndex) {
+        state.frames[frameIndex].lines.splice(lineIndex, 1);
 
-        if (state.selectedLine === lineIndex) {
+        if (state.selectedLine !== null && state.selectedLine[0] === frameIndex && state.selectedLine[1] === lineIndex) {
             state.selectedLine = null;
-        } else if (state.selectedLine > lineIndex) {
-            state.selectedLine -= 1;
+        } else if (state.selectedLine[1] > lineIndex) {
+            state.selectedLine[1] -= 1;
         }
         
-        linesData.splice(lineIndex, 1);
+        linesData[frameIndex].splice(lineIndex, 1);
     }
 
     /**
@@ -504,11 +1085,12 @@ window.addEventListener("load", () => {
 
     /**
      * 
+     * @param {number} frameIndex 
      * @param {number} lineIndex 
      * @returns {LineData | null}
      */
-    function calculateLineData(lineIndex) {
-        const line = state.lines[lineIndex];
+    function calculateLineData(frameIndex, lineIndex) {
+        const line = state.frames[frameIndex].lines[lineIndex];
 
         let emptyCount = 0;
         let filledCount = 0;
@@ -699,25 +1281,28 @@ window.addEventListener("load", () => {
 
     /**
      * 
+     * @param {number} frameIndex 
      * @param {number} lineIndex 
      */
-    function updateLineData(lineIndex) {
-        linesData[lineIndex] = calculateLineData(lineIndex);
+    function updateLineData(frameIndex, lineIndex) {
+        linesData[frameIndex][lineIndex] = calculateLineData(frameIndex, lineIndex);
     }
 
     /**
      * 
-     * @param {number} lineIndex 
      */
     function updateAllLineData() {
-        linesData.length = 0;
-        for (let i = 0; i < state.lines.length; i++) {
-            linesData.push(calculateLineData(i));
+        for (let frameIndex = 0; frameIndex < state.frames.length; frameIndex++) {
+            linesData[frameIndex].length = 0;
+            for (let lineIndex = 0; lineIndex < state.frames[frameIndex].lines.length; lineIndex++) {
+                linesData[frameIndex].push(calculateLineData(frameIndex, lineIndex));
+            }
         }
     }
 
     /**
      * 
+     * @param {number} frameIndex 
      * @param {number} lineIndex 
      * @returns {{
      *     a: number,
@@ -725,9 +1310,9 @@ window.addEventListener("load", () => {
      *     c: number,
      * } | null}
      */
-    function calculateBestLineABCNorm(lineIndex) {
-        const line = state.lines[lineIndex];
-        const lineData = linesData[lineIndex];
+    function calculateBestLineABCNorm(frameIndex, lineIndex) {
+        const line = state.frames[frameIndex].lines[lineIndex];
+        const lineData = linesData[frameIndex][lineIndex];
         if (lineData === null) return null;
 
         const emptyStartIndex = lineData.emptySplitPath[0];
@@ -754,34 +1339,36 @@ window.addEventListener("load", () => {
 
     /**
      * 
+     * @param {number} frameIndex 
      * @param {number} lineIndex 
      * @param {number} pointIndex 
      */
-    function toggleLinePoint(lineIndex, pointIndex) {
-        const line = state.lines[lineIndex];
+    function toggleLinePoint(frameIndex, lineIndex, pointIndex) {
+        const line = state.frames[frameIndex].lines[lineIndex];
 
         const i = line.points.indexOf(pointIndex);
         if (i !== -1) {
             line.points.splice(i, 1);
 
             if (line.points.length === 0 && line.pixels.length === 0) {
-                removeLine(lineIndex);
+                removeLine(frameIndex, lineIndex);
             }
         } else {
             line.points.push(pointIndex);
         }
 
-        updateLineData(lineIndex);
+        updateLineData(frameIndex, lineIndex);
     }
 
     /**
      * 
+     * @param {number} frameIndex 
      * @param {number} lineIndex 
      * @param {number} px 
      * @param {number} py 
      */
-    function toggleLinePixel(lineIndex, px, py) {
-        const line = state.lines[lineIndex];
+    function toggleLinePixel(frameIndex, lineIndex, px, py) {
+        const line = state.frames[frameIndex].lines[lineIndex];
 
         for (let i = 0; i < line.pixels.length; i++) {
             const pixel = line.pixels[i];
@@ -794,14 +1381,14 @@ window.addEventListener("load", () => {
                     line.pixels.splice(i, 1);
 
                     if (line.points.length === 0 && line.pixels.length === 0) {
-                        removeLine(lineIndex);
+                        removeLine(frameIndex, lineIndex);
                         return;
                     }
                 } else {
                     pixel.filled = newFilled;
                 }
 
-                updateLineData(lineIndex);
+                updateLineData(frameIndex, lineIndex);
 
                 return;
             }
@@ -813,29 +1400,32 @@ window.addEventListener("load", () => {
             filled: false,
         });
 
-        updateLineData(lineIndex);
+        updateLineData(frameIndex, lineIndex);
     }
 
     /**
      * 
+     * @param {number} frameIndex 
      * @param {number} lineIndex 
      * @returns {boolean}
      */
-    function validateLine(lineIndex) {
-        return linesData[lineIndex] !== null;
+    function validateLine(frameIndex, lineIndex) {
+        return linesData[frameIndex][lineIndex] !== null;
     }
 
     /**
      * 
+     * @param {number | null} frameIndex 
      * @param {number | null} lineIndex 
      * @returns {boolean}
      */
-    function selectLine(lineIndex) {
-        if (state.selectedLine === lineIndex) return true;
+    function selectLine(frameIndex, lineIndex) {
+        const isNull = frameIndex === null || lineIndex === null;
+        if (state.selectedLine === null ? isNull : state.selectedLine[0] === frameIndex && state.selectedLine[1] === lineIndex) return true;
 
         if (state.selectedLine !== null) {
-            if (!validateLine(state.selectedLine)) {
-                const line = state.lines[state.selectedLine];
+            if (!validateLine(state.selectedLine[0], state.selectedLine[1])) {
+                const line = state.frames[state.selectedLine[0]].lines[state.selectedLine[1]];
 
                 if (line.points.length !== 0 || line.pixels.length !== 0) {
                     if (!window.confirm("The selected line is not valid. Deselecting will delete it.")) {
@@ -843,256 +1433,265 @@ window.addEventListener("load", () => {
                     }
                 }
     
-                removeLine(state.selectedLine);
+                removeLine(state.selectedLine[0], state.selectedLine[1]);
             }
         }
 
-        state.selectedLine = lineIndex;
+        state.selectedLine = [frameIndex, lineIndex];
 
         return true;
     }
 
-    /**
-     * 
-     * @param {Line} line 
-     * @param {number} pointIndex 
-     * @returns {{
-     *     minDist: number,
-     *     minDirX: number,
-     *     minDirY: number,
-     *     maxDist: number,
-     *     maxDirX: number,
-     *     maxDirY: number,
-     * } | null}
-     */
-    function getLineCuts(line, pointIndex) {
-        // the coordinate system of the image uses Y+ going down
-        // most of the distances are signed, when they are positive the point is to the left of the line
+    // /**
+    //  * 
+    //  * @param {Line} line 
+    //  * @param {number} pointIndex 
+    //  * @returns {{
+    //  *     minDist: number,
+    //  *     minDirX: number,
+    //  *     minDirY: number,
+    //  *     maxDist: number,
+    //  *     maxDirX: number,
+    //  *     maxDirY: number,
+    //  * } | null}
+    //  */
+    // function getLineCuts(line, pointIndex) {
+    //     // the coordinate system of the image uses Y+ going down
+    //     // most of the distances are signed, when they are positive the point is to the left of the line
 
-        if (line.p0 !== pointIndex && line.p1 !== pointIndex) return null;
+    //     if (line.p0 !== pointIndex && line.p1 !== pointIndex) return null;
 
-        const p0 = pointIndex;
-        const p1 = line.p0 === pointIndex ? line.p1 : line.p0;
+    //     const p0 = pointIndex;
+    //     const p1 = line.p0 === pointIndex ? line.p1 : line.p0;
 
-        const point0 = state.points[p0];
-        const point1 = state.points[p1];
+    //     const point0 = state.points[p0];
+    //     const point1 = state.points[p1];
 
-        // vector from the second point to the main point
-        const pointDirX = point0.px - point1.px;
-        const pointDirY = point0.py - point1.py;
+    //     // vector from the second point to the main point
+    //     const pointDirX = point0.px - point1.px;
+    //     const pointDirY = point0.py - point1.py;
 
-        // the above vector rotated by 90deg facing left
-        const pointDirNormX = pointDirY;
-        const pointDirNormY = -pointDirX;
+    //     // the above vector rotated by 90deg facing left
+    //     const pointDirNormX = pointDirY;
+    //     const pointDirNormY = -pointDirX;
 
-        let emptyCount = 0;
-        let emptyDist = 0;
-        let filledCount = 0;
-        let filledDist = 0;
+    //     let emptyCount = 0;
+    //     let emptyDist = 0;
+    //     let filledCount = 0;
+    //     let filledDist = 0;
 
-        for (const pixel of line.pixels) {
-            // Distance from the pixel to the approximate line set by the user, scaled by the length of pointDir
-            const dist = pointDirNormX * ((pixel.px + 0.5) - point1.px) + pointDirNormY * ((pixel.py + 0.5) - point1.py);
+    //     for (const pixel of line.pixels) {
+    //         // Distance from the pixel to the approximate line set by the user, scaled by the length of pointDir
+    //         const dist = pointDirNormX * ((pixel.px + 0.5) - point1.px) + pointDirNormY * ((pixel.py + 0.5) - point1.py);
 
-            if (pixel.filled) {
-                filledCount += 1;
-                filledDist += dist;
-            } else {
-                emptyCount += 1;
-                emptyDist += dist;
-            }
-        }
+    //         if (pixel.filled) {
+    //             filledCount += 1;
+    //             filledDist += dist;
+    //         } else {
+    //             emptyCount += 1;
+    //             emptyDist += dist;
+    //         }
+    //     }
 
-        if (emptyCount === 0 || filledCount === 0) return null;
+    //     if (emptyCount === 0 || filledCount === 0) return null;
 
-        emptyDist /= emptyCount;
-        filledDist /= filledCount;
-        // are "empty" pixels to the left of the pointDir vector or to the right
-        const emptyToTheLeft = emptyDist > filledDist;
+    //     emptyDist /= emptyCount;
+    //     filledDist /= filledCount;
+    //     // are "empty" pixels to the left of the pointDir vector or to the right
+    //     const emptyToTheLeft = emptyDist > filledDist;
 
-        let minDist = Number.MAX_VALUE;
-        let minDirX = 0;
-        let minDirY = 0;
-        let maxDist = -Number.MAX_VALUE;
-        let maxDirX = 0;
-        let maxDirY = 0;
+    //     let minDist = Number.MAX_VALUE;
+    //     let minDirX = 0;
+    //     let minDirY = 0;
+    //     let maxDist = -Number.MAX_VALUE;
+    //     let maxDirX = 0;
+    //     let maxDirY = 0;
 
-        for (let i = 0; i < line.pixels.length; i++) {
-            const pixel1 = line.pixels[i];
-            const pixel1Left = pixel1.filled ^ emptyToTheLeft;
+    //     for (let i = 0; i < line.pixels.length; i++) {
+    //         const pixel1 = line.pixels[i];
+    //         const pixel1Left = pixel1.filled ^ emptyToTheLeft;
 
-            for (let j = i + 1; j < line.pixels.length; j++) {
-                const pixel2 = line.pixels[j];
-                const pixel2Left = pixel2.filled ^ emptyToTheLeft;
-                if (pixel1Left === pixel2Left) continue;
+    //         for (let j = i + 1; j < line.pixels.length; j++) {
+    //             const pixel2 = line.pixels[j];
+    //             const pixel2Left = pixel2.filled ^ emptyToTheLeft;
+    //             if (pixel1Left === pixel2Left) continue;
 
-                // vector between 2 pixels
-                let pixelDirX = (pixel2.px + 0.5) - (pixel1.px + 0.5);
-                let pixelDirY = (pixel2.py + 0.5) - (pixel1.py + 0.5);
+    //             // vector between 2 pixels
+    //             let pixelDirX = (pixel2.px + 0.5) - (pixel1.px + 0.5);
+    //             let pixelDirY = (pixel2.py + 0.5) - (pixel1.py + 0.5);
 
-                // Flip the vector if it is not facing the main point
-                const flipped = pixelDirX * pointDirX + pixelDirY * pointDirY < 0;
-                if (flipped) {
-                    pixelDirX *= -1;
-                    pixelDirY *= -1;
-                }
+    //             // Flip the vector if it is not facing the main point
+    //             const flipped = pixelDirX * pointDirX + pixelDirY * pointDirY < 0;
+    //             if (flipped) {
+    //                 pixelDirX *= -1;
+    //                 pixelDirY *= -1;
+    //             }
 
-                const pixelDirNormX = pixelDirY;
-                const pixelDirNormY = -pixelDirX;
+    //             const pixelDirNormX = pixelDirY;
+    //             const pixelDirNormY = -pixelDirX;
 
-                // Distance from the main point to the line going throught two pixels
-                const dist = (pixelDirNormX * (point0.px - (pixel1.px + 0.5)) + pixelDirNormY * (point0.py - (pixel1.py + 0.5))) / Math.sqrt(pixelDirX * pixelDirX + pixelDirY * pixelDirY);
+    //             // Distance from the main point to the line going throught two pixels
+    //             const dist = (pixelDirNormX * (point0.px - (pixel1.px + 0.5)) + pixelDirNormY * (point0.py - (pixel1.py + 0.5))) / Math.sqrt(pixelDirX * pixelDirX + pixelDirY * pixelDirY);
 
-                if (pixel2Left ^ flipped) {
-                    // Cut off everything to the left - sets max dist
-                    if (dist > maxDist) {
-                        maxDist = dist;
-                        maxDirX = pixelDirX;
-                        maxDirY = pixelDirY;
-                    }
-                } else {
-                    // Cut off everything to the right - sets min dist
-                    if (dist < minDist) {
-                        minDist = dist;
-                        minDirX = pixelDirX;
-                        minDirY = pixelDirY;
-                    }
-                }
-            }
-        }
+    //             if (pixel2Left ^ flipped) {
+    //                 // Cut off everything to the left - sets max dist
+    //                 if (dist > maxDist) {
+    //                     maxDist = dist;
+    //                     maxDirX = pixelDirX;
+    //                     maxDirY = pixelDirY;
+    //                 }
+    //             } else {
+    //                 // Cut off everything to the right - sets min dist
+    //                 if (dist < minDist) {
+    //                     minDist = dist;
+    //                     minDirX = pixelDirX;
+    //                     minDirY = pixelDirY;
+    //                 }
+    //             }
+    //         }
+    //     }
 
-        if (minDist === Number.MAX_VALUE || maxDist === -Number.MAX_VALUE) return null;
+    //     if (minDist === Number.MAX_VALUE || maxDist === -Number.MAX_VALUE) return null;
 
-        const minDirLen = Math.sqrt(minDirX * minDirX + minDirY * minDirY);
-        const maxDirLen = Math.sqrt(maxDirX * maxDirX + maxDirY * maxDirY);
+    //     const minDirLen = Math.sqrt(minDirX * minDirX + minDirY * minDirY);
+    //     const maxDirLen = Math.sqrt(maxDirX * maxDirX + maxDirY * maxDirY);
 
-        return {
-            minDist: minDist,
-            minDirX: minDirX / minDirLen,
-            minDirY: minDirY / minDirLen,
-            maxDist: -maxDist,
-            maxDirX: -maxDirX / maxDirLen,
-            maxDirY: -maxDirY / maxDirLen,
-        };
-    }
+    //     return {
+    //         minDist: minDist,
+    //         minDirX: minDirX / minDirLen,
+    //         minDirY: minDirY / minDirLen,
+    //         maxDist: -maxDist,
+    //         maxDirX: -maxDirX / maxDirLen,
+    //         maxDirY: -maxDirY / maxDirLen,
+    //     };
+    // }
 
-    /**
-     * @typedef {{
-     *     x: number,
-     *     y: number,
-     * }} PolygonPoint
-     */
+    // /**
+    //  * @typedef {{
+    //  *     x: number,
+    //  *     y: number,
+    //  * }} PolygonPoint
+    //  */
 
-    /**
-     * @typedef {PolygonPoint[]} Polygon
-     */
+    // /**
+    //  * @typedef {PolygonPoint[]} Polygon
+    //  */
 
-    /**
-     * 
-     * @param {Polygon} polygon 
-     * @param {number} cutA 
-     * @param {number} cutB 
-     * @param {number} cutC 
-     */
-    function cutPolygon(polygon, cutA, cutB, cutC) {
-        const intersections = [];
+    // /**
+    //  * 
+    //  * @param {Polygon} polygon 
+    //  * @param {number} cutA 
+    //  * @param {number} cutB 
+    //  * @param {number} cutC 
+    //  */
+    // function cutPolygon(polygon, cutA, cutB, cutC) {
+    //     const intersections = [];
 
-        for (let i = 0; i < polygon.length; i++) {
-            const p1 = polygon[i];
-            const p2 = polygon[(i + 1) % polygon.length];
+    //     for (let i = 0; i < polygon.length; i++) {
+    //         const p1 = polygon[i];
+    //         const p2 = polygon[(i + 1) % polygon.length];
 
-            const edgeA = p2.y - p1.y;
-            const edgeB = p1.x - p2.x;
-            const edgeC = p2.x * p1.y - p1.x * p2.y;
+    //         const edgeA = p2.y - p1.y;
+    //         const edgeB = p1.x - p2.x;
+    //         const edgeC = p2.x * p1.y - p1.x * p2.y;
 
-            const intersectionX = (cutB * edgeC - edgeB * cutC) / (edgeB * cutA - cutB * edgeA);
-            const intersectionY = (cutA * edgeC - edgeA * cutC) / (edgeA * cutB - cutA * edgeB);
+    //         const intersectionX = (cutB * edgeC - edgeB * cutC) / (edgeB * cutA - cutB * edgeA);
+    //         const intersectionY = (cutA * edgeC - edgeA * cutC) / (edgeA * cutB - cutA * edgeB);
 
-            if (!Number.isFinite(intersectionX) || !Number.isFinite(intersectionY)) continue;
+    //         if (!Number.isFinite(intersectionX) || !Number.isFinite(intersectionY)) continue;
 
-            const edgeLenSq = (p2.x - p1.x) * (p2.x - p1.x) + (p2.y - p1.y) * (p2.y - p1.y);
-            const t = ((p2.x - p1.x) * (intersectionX - p1.x) + (p2.y - p1.y) * (intersectionY - p1.y)) / edgeLenSq;
-            if (t < -1e-6 || t > 1) continue;
+    //         const edgeLenSq = (p2.x - p1.x) * (p2.x - p1.x) + (p2.y - p1.y) * (p2.y - p1.y);
+    //         const t = ((p2.x - p1.x) * (intersectionX - p1.x) + (p2.y - p1.y) * (intersectionY - p1.y)) / edgeLenSq;
+    //         if (t < -1e-6 || t > 1) continue;
 
-            intersections.push({
-                x: intersectionX,
-                y: intersectionY,
-                i: i,
-            });
-        }
+    //         intersections.push({
+    //             x: intersectionX,
+    //             y: intersectionY,
+    //             i: i,
+    //         });
+    //     }
 
-        if (intersections.length !== 2) return;
+    //     if (intersections.length !== 2) return;
 
-        const cutDirX = -cutB;
-        const cutDirY = cutA;
+    //     const cutDirX = -cutB;
+    //     const cutDirY = cutA;
 
-        intersections.sort((intersection1, intersection2) => {
-            const dirX = intersection2.x - intersection1.x;
-            const dirY = intersection2.y - intersection1.y;
+    //     intersections.sort((intersection1, intersection2) => {
+    //         const dirX = intersection2.x - intersection1.x;
+    //         const dirY = intersection2.y - intersection1.y;
             
-            return cutDirX * dirX + cutDirY * dirY;
-        });
+    //         return cutDirX * dirX + cutDirY * dirY;
+    //     });
 
-        let deleteCount = intersections[1].i - intersections[0].i;
-        if (deleteCount < 0) deleteCount += polygon.length;
-        deleteCount -= polygon.splice(intersections[0].i + 1, deleteCount, { x: intersections[0].x, y: intersections[0].y }, { x: intersections[1].x, y: intersections[1].y }).length;
-        polygon.splice(0, deleteCount);
-    }
+    //     let deleteCount = intersections[1].i - intersections[0].i;
+    //     if (deleteCount < 0) deleteCount += polygon.length;
+    //     deleteCount -= polygon.splice(intersections[0].i + 1, deleteCount, { x: intersections[0].x, y: intersections[0].y }, { x: intersections[1].x, y: intersections[1].y }).length;
+    //     polygon.splice(0, deleteCount);
+    // }
 
-    /**
-     * 
-     * @param {number} pointIndex 
-     * @returns {Polygon}
-     */
-    function calculatePointPolygon(pointIndex) {
-        const point = state.points[pointIndex];
+    // /**
+    //  * 
+    //  * @param {number} pointIndex 
+    //  * @returns {Polygon}
+    //  */
+    // function calculatePointPolygon(pointIndex) {
+    //     const point = state.points[pointIndex];
 
-        const polygon = [
-            { x: point.px - 3, y: point.py - 3 },
-            { x: point.px + 3, y: point.py - 3 },
-            { x: point.px + 3, y: point.py + 3 },
-            { x: point.px - 3, y: point.py + 3 },
-        ];
+    //     const polygon = [
+    //         { x: point.px - 3, y: point.py - 3 },
+    //         { x: point.px + 3, y: point.py - 3 },
+    //         { x: point.px + 3, y: point.py + 3 },
+    //         { x: point.px - 3, y: point.py + 3 },
+    //     ];
 
-        for (const line of state.lines) {
-            const cuts = getLineCuts(line, pointIndex);
-            if (cuts === null) continue;
+    //     for (const line of state.lines) {
+    //         const cuts = getLineCuts(line, pointIndex);
+    //         if (cuts === null) continue;
 
-            const minA = cuts.minDirY;
-            const minB = -cuts.minDirX;
-            const minC = -(point.px * minA + point.py * minB - cuts.minDist);
+    //         const minA = cuts.minDirY;
+    //         const minB = -cuts.minDirX;
+    //         const minC = -(point.px * minA + point.py * minB - cuts.minDist);
 
-            const maxA = cuts.maxDirY;
-            const maxB = -cuts.maxDirX;
-            const maxC = -(point.px * maxA + point.py * maxB - cuts.maxDist);
+    //         const maxA = cuts.maxDirY;
+    //         const maxB = -cuts.maxDirX;
+    //         const maxC = -(point.px * maxA + point.py * maxB - cuts.maxDist);
 
-            console.log(`${minA} ${minB} ${minC} ${maxA} ${maxB} ${maxC}`);
+    //         console.log(`${minA} ${minB} ${minC} ${maxA} ${maxB} ${maxC}`);
 
-            cutPolygon(polygon, minA, minB, minC);
-            cutPolygon(polygon, maxA, maxB, maxC);
-        }
+    //         cutPolygon(polygon, minA, minB, minC);
+    //         cutPolygon(polygon, maxA, maxB, maxC);
+    //     }
 
-        return polygon;
-    }
+    //     return polygon;
+    // }
 
     /**
      * @type {HTMLInputElement}
      */
-    const imageInput = document.getElementById("input-image");
-    imageInput.addEventListener("change", () => {
-        if (imageInput.files.length === 0) return;
+    const imagesInput = document.getElementById("input-images");
+    imagesInput.addEventListener("change", () => {
+        Promise.allSettled(Array.from(imagesInput.files).map((file) => {
+            const url = URL.createObjectURL(file);
 
-        const file = imageInput.files.item(0);
-        imageInput.value = "";
+            return loadImage(url).finally(() => URL.revokeObjectURL(url));
+        })).then((results) => {
+            let failedCount = 0;
 
-        const url = URL.createObjectURL(file);
+            for (const result of results) {
+                if (result.status === "fulfilled") {
+                    addFrame();
 
-        loadImage(url).then((image) => {
-            setLoadedImage(image);
+                    setFrameImage(frames.length - 1, result.value);
+                } else {
+                    failedCount += 1;
+                }
+            }
 
             requestRedraw();
-        }).finally(() => {
-            URL.revokeObjectURL(url);
+
+            if (failedCount !== 0) {
+                alert(`Failed loading ${failedCount} images`);
+            }
         });
     });
 
@@ -1101,11 +1700,18 @@ window.addEventListener("load", () => {
      */
     const pointSelect = document.getElementById("select-point");
     pointSelect.addEventListener("change", () => {
-        const newSelectedPoint = pointSelect.selectedIndex !== 0 ? pointSelect.selectedIndex - 1 : null;
-        if (newSelectedPoint === state.selectedPoint) return;
+        let frameIndex;
+        let pointIndex;
+        if (pointSelect.selectedIndex === 0) {
+            if (state.selectedPoint === null) return;
+            frameIndex = null;
+        } else {
+            [ frameIndex, pointIndex ] = pointSelect[pointSelect.selectedIndex].innerText.split("-").map((s) => Number(s));
+            if (state.selectedPoint !== null && state.selectedPoint[0] === frameIndex && state.selectedPoint[1] === pointIndex) return;
+        }
 
         if (selectLine(null)) {
-            selectPoint(newSelectedPoint);
+            selectPoint(frameIndex, pointIndex);
         }
 
         requestRedraw();
@@ -1186,7 +1792,7 @@ window.addEventListener("load", () => {
     initCoordsInputs([ worldPosXInput, worldPosYInput, worldPosZInput ], (values) => {
         if (state.selectedPoint === null) return;
 
-        movePointWorld(state.selectedPoint, ...values);
+        movePointWorld(state.selectedPoint[0], state.selectedPoint[1], ...values);
 
         requestRedraw();
     });
@@ -1198,7 +1804,7 @@ window.addEventListener("load", () => {
     worldPosCopyInput.addEventListener("click", (event) => {
         if (state.selectedPoint === null) return;
 
-        const point = state.points[state.selectedPoint];
+        const point = state.frames[state.selectedPoint[0]].points[state.selectedPoint[1]];
 
         navigator.clipboard.writeText(`${point.wx} ${point.wy} ${point.wz}`);
     });
@@ -1215,7 +1821,7 @@ window.addEventListener("load", () => {
     initCoordsInputs([ projectedPosXInput, projectedPosYInput ], (values) => {
         if (state.selectedPoint === null) return;
 
-        movePointProjected(state.selectedPoint, ...values);
+        movePointProjected(state.selectedPoint[0], state.selectedPoint[1], ...values);
     });
 
     /**
@@ -1225,7 +1831,7 @@ window.addEventListener("load", () => {
     projectedPosCopyInput.addEventListener("click", (event) => {
         if (state.selectedPoint === null) return;
 
-        const point = state.points[state.selectedPoint];
+        const point = state.frames[state.selectedPoint[0]].points[state.selectedPoint[1]];
 
         navigator.clipboard.writeText(`${point.px} ${point.py}`);
     });
@@ -1235,9 +1841,17 @@ window.addEventListener("load", () => {
      */
     const lineSelect = document.getElementById("select-line");
     lineSelect.addEventListener("change", () => {
-        const newSelectedLine = lineSelect.selectedIndex !== 0 ? lineSelect.selectedIndex - 1 : null;
+        let frameIndex;
+        let lineIndex;
+        if (lineSelect.selectedIndex === 0) {
+            if (state.selectedLine === null) return;
+            frameIndex = null;
+        } else {
+            [ frameIndex, lineIndex ] = lineSelect[lineSelect.selectedIndex].innerText.split("-").map((s) => Number(s));
+            if (state.selectedLine !== null && state.selectedLine[0] === frameIndex && state.selectedLine[1] === lineIndex) return;
+        }
 
-        if (selectLine(newSelectedLine)) {
+        if (selectLine(frameIndex, lineIndex)) {
             selectPoint(null);
         }
 
@@ -1245,10 +1859,51 @@ window.addEventListener("load", () => {
     });
 
     /**
-     * @type {HTMLCanvasElement}
+     * @type {HTMLButtonElement}
      */
-    const canvas = document.getElementById("canvas");
-    const context = canvas.getContext("2d");
+    const addFrameButton = document.getElementById("button-add-frame");
+    addFrameButton.addEventListener("click", () => {
+        addFrame();
+    });
+
+    /**
+     * 
+     * @param {number} sliderValue 
+     * @returns {number}
+     */
+    function brightnessFunction(sliderValue) {
+        return sliderValue * sliderValue / 100;
+    }
+
+    /**
+     * 
+     * @param {number} brightness 
+     * @returns {number}
+     */
+    function brightnessFunctionInv(brightness) {
+        return Math.sqrt(brightness * 100);
+    }
+
+    /**
+     * @type {HTMLInputElement}
+     */
+    const brightnessInput = document.getElementById("input-brightness");
+    brightnessInput.min = 10;
+    brightnessInput.max = 100;
+    brightnessInput.addEventListener("input", () => {
+        brightnessValueLabel.innerText = brightnessValueLabel.innerText = `${brightnessFunction(Number(brightnessInput.value))}x`;
+    });
+    brightnessInput.addEventListener("change", () => {
+        state.brightness = brightnessFunction(Number(brightnessInput.value));
+        
+        updateBrightness();
+        requestRedraw();
+    });
+
+    /**
+     * @type {HTMLLabelElement}
+     */
+    const brightnessValueLabel = document.getElementById("label-brightness-value");
 
     /**
      * @type {HTMLInputElement}
@@ -1535,19 +2190,19 @@ window.addEventListener("load", () => {
      */
     const reverseInput = document.getElementById("input-reverse");
     reverseInput.addEventListener("click", (event) => {
-        if (loadedImage === null) return;
+        if (imageWidth === null) return;
 
-        const worldPoints = state.points.map((point) => {
+        const worldPoints = state.frames[0].points.map((point) => {
             return [ point.wx, point.wy, point.wz ];
         });
-        const projectedPoints = state.points.map((point) => {
+        const projectedPoints = state.frames[0].points.map((point) => {
             return [ point.px, point.py ];
         });
 
         const constants = [
             state.offsetBy01,
-            loadedImage.width,
-            loadedImage.height,
+            imageWidth,
+            imageHeight,
         ];
         const startingVariables = [
             state.cameraX,
@@ -1615,10 +2270,12 @@ window.addEventListener("load", () => {
         const dy = state.moveWorldY;
         const dz = state.moveWorldZ;
 
-        for (const point of state.points) {
-            point.wx += dx;
-            point.wy += dy;
-            point.wz += dz;
+        for (const frame of state.frames) {
+            for (const point of frame.points) {
+                point.wx += dx;
+                point.wy += dy;
+                point.wz += dz;
+            }
         }
         state.cameraX += dx;
         state.cameraY += dy;
@@ -1639,6 +2296,13 @@ window.addEventListener("load", () => {
     stateTextarea.addEventListener("paste", (event) => {
         const newState = JSON.parse(event.clipboardData.getData("text"));
 
+        while (frames.length < newState.frames.length) {
+            addFrame();
+        }
+        while (frames.length > newState.frames.length) {
+            removeFrame(frames.length - 1);
+        }
+
         for (const key in state) {
             if (typeof newState[key] === "undefined") {
                 newState[key] = JSON.parse(JSON.stringify(state[key]));
@@ -1647,9 +2311,29 @@ window.addEventListener("load", () => {
 
         state = newState;
 
-        linesData = Array(state.lines.length).fill(null);
-        for (let i = 0; i < state.lines.length; i++) {
-            updateLineData(i);
+        updateAllLineData();
+
+        requestRedraw();
+    });
+
+    /**
+     * @type {HTMLTextAreaElement}
+     */
+    const tomdataTextarea = document.getElementById("textarea-tomdata");
+    tomdataTextarea.readOnly = true;
+    tomdataTextarea.addEventListener("paste", (event) => {
+        if (state.selectedPoint === null) return;
+
+        const points = JSON.parse(event.clipboardData.getData("text").replaceAll("(", "[").replaceAll(")", "]"));
+
+        const frameIndex = state.selectedPoint[0];
+
+        for (let pointIndex = state.frames[frameIndex].points.length - 1; pointIndex >= 0; pointIndex--) {
+            removePoint(frameIndex, pointIndex);
+        }
+
+        for (const point of points) {
+            createPoint(frameIndex, ...point[0], ...point[1]);
         }
 
         requestRedraw();
@@ -1736,272 +2420,8 @@ window.addEventListener("load", () => {
     //     requestRedraw();
     // });
 
-    let centerX = 0;
-    let centerY = 0;
-    let zoomIndex = 0;
-    let zoom = 1;
-    let prevMouseDownPos = null;
-    let prevMouseUpPos = null;
-    let mouseDragging = false;
-    let draggedPointIndex = null;
-    let draggedPointOffsetX = 0;
-    let draggedPointOffsetY = 0;
-    let doubleClickStartTime = 0;
-
-    canvas.tabIndex = -1;
-
-    canvas.addEventListener("mousedown", (event) => {
-        if (loadedImage === null) return;
-        
-        event.preventDefault();
-        
-        canvas.focus();
-
-        if (prevMouseDownPos !== null) return;
-
-        if (!event.shiftKey && Date.now() - doubleClickStartTime <= CONFIG.doubleClickDelay && prevMouseUpPos !== null) {
-            const dx = event.offsetX - prevMouseUpPos.x;
-            const dy = event.offsetY - prevMouseUpPos.y;
-            const dsq = dx * dx + dy * dy;
-            if (dsq <= CONFIG.mouseDragMin * CONFIG.mouseDragMin) {
-                const px = roundTo(roundTo((event.offsetX - canvas.clientWidth / 2) / zoom + centerX, zoom), 1000);
-                const py = roundTo(roundTo((event.offsetY - canvas.clientHeight / 2) / zoom + centerY, zoom), 1000);
-
-                let wx = 0;
-                let wy = 0;
-                let wz = 0;
-                if (state.selectedPointHistory.length !== 0) {
-                    const point = state.points[state.selectedPointHistory[state.selectedPointHistory.length - 1]];
-                    wx = point.wx;
-                    wy = point.wy;
-                    wz = point.wz;
-                }
-
-                if (selectLine(null)) {
-                    selectPoint(createPoint(wx, wy, wz, px, py));
-
-                    requestRedraw();
-                }
-            }
-        }
-
-        draggedPointIndex = null;
-
-        let minDsq = Number.MAX_VALUE;
-
-        for (let i = 0; i < state.points.length; i++) {
-            if (!(i === state.selectedPoint || state.selectedLine !== null && state.lines[state.selectedLine].points.includes(i))) continue;
-
-            const px = (event.offsetX - canvas.clientWidth / 2) / zoom + centerX;
-            const py = (event.offsetY - canvas.clientHeight / 2) / zoom + centerY;
-
-            const point = state.points[i];
-
-            const dx = (point.px - px) * zoom;
-            const dy = (point.py - py) * zoom;
-            const dsq = dx * dx + dy * dy;
-
-            if (dsq < CONFIG.pointOuterRadius * CONFIG.pointOuterRadius && dsq < minDsq) {
-                minDsq = dsq;
-                draggedPointIndex = i;
-                draggedPointOffsetX = dx;
-                draggedPointOffsetY = dy;
-            }
-        }
-
-        prevMouseDownPos = {
-            x: event.offsetX,
-            y: event.offsetY,
-        };
-        doubleClickStartTime = Date.now();
-    });
-
-    window.addEventListener("mouseup", (event) => {
-        if (loadedImage === null) return;
-        
-        if (prevMouseDownPos === null) return;
-
-        if (!mouseDragging) {
-            const px = (event.offsetX - canvas.clientWidth / 2) / zoom + centerX;
-            const py = (event.offsetY - canvas.clientHeight / 2) / zoom + centerY;
-
-            let minPointDistSq = Number.MAX_VALUE;
-            let clickedPointIndex = null;
-            
-            for (let i = 0; i < state.points.length; i++) {
-                const point = state.points[i];
-                const radius = state.selectedPoint === i ? CONFIG.pointOuterRadius : state.selectedLine !== null && state.lines[state.selectedLine].points.includes(i) ? CONFIG.pointOuterRadius - (CONFIG.pointOuterRadius - CONFIG.pointInnerRadius) / 2 : CONFIG.pointInnerRadius + CONFIG.pointEdgeWidth;
-
-                const dx = (point.px - px) * zoom;
-                const dy = (point.py - py) * zoom;
-                const dsq = dx * dx + dy * dy;
-                
-                if (dsq <= radius * radius && dsq < minPointDistSq) {
-                    minPointDistSq = dsq;
-                    clickedPointIndex = i;
-                }
-            }
-
-            if (clickedPointIndex !== null) {
-                if (event.shiftKey) {
-                    selectPoint(null);
-
-                    if (state.selectedLine === null) {
-                        selectLine(createLine());
-                    }
-
-                    toggleLinePoint(state.selectedLine, clickedPointIndex);
-                } else {
-                    if (selectLine(null)) {
-                        selectPoint(clickedPointIndex);
-                    }
-                }
-            } else {
-                let minLineDist = Number.MAX_VALUE;
-                let clickedLineIndex = null;
-
-                for (let i = 0; i < state.lines.length; i++) {
-                    const abc = calculateBestLineABCNorm(i);
-                    if (abc === null) continue;
-
-                    const lineDist = Math.abs(abc.a * px + abc.b * py + abc.c);
-                    if (lineDist < 5 / zoom && lineDist < minLineDist) {
-                        minLineDist = lineDist;
-                        clickedLineIndex = i;
-                    }
-                }
-
-                if (clickedLineIndex !== null && !event.shiftKey) {
-                    if (selectLine(clickedLineIndex)) {
-                        selectPoint(null);
-                    }
-                } else {
-                    if (event.shiftKey) {
-                        const pixelPx = Math.floor((event.offsetX - canvas.clientWidth / 2) / zoom + roundPx(centerX));
-                        const pixelPy = Math.floor((event.offsetY - canvas.clientHeight / 2) / zoom + roundPx(centerY));
-        
-                        selectPoint(null);
-
-                        if (state.selectedLine === null) {
-                            selectLine(createLine());
-                        }
-
-                        toggleLinePixel(state.selectedLine, pixelPx, pixelPy);
-                    } else {
-                        selectPoint(null);
-                        selectLine(null);
-                    }
-                }
-            }
-
-            requestRedraw();
-        }
-
-        prevMouseDownPos = null;
-        prevMouseUpPos = {
-            x: event.offsetX,
-            y: event.offsetY,
-        };
-        mouseDragging = false;
-        draggedPointIndex = null;
-    });
-
-    canvas.addEventListener("mousemove", (event) => {
-        if (loadedImage === null) return;
-
-        event.preventDefault();
-
-        if (!mouseDragging && prevMouseDownPos !== null) {
-            const dx = event.offsetX - prevMouseDownPos.x;
-            const dy = event.offsetY - prevMouseDownPos.y;
-            const dsq = dx * dx + dy * dy;
-
-            if (dsq > CONFIG.mouseDragMin * CONFIG.mouseDragMin) {
-                mouseDragging = true;
-                doubleClickStartTime = 0;
-            }
-        }
-
-        if (mouseDragging) {
-            const dx = event.offsetX - prevMouseDownPos.x;
-            const dy = event.offsetY - prevMouseDownPos.y;
-
-            if (draggedPointIndex !== null) {
-                const px = roundTo(roundTo((event.offsetX + draggedPointOffsetX - canvas.clientWidth / 2) / zoom + centerX, zoom), 1000);
-                const py = roundTo(roundTo((event.offsetY + draggedPointOffsetY - canvas.clientHeight / 2) / zoom + centerY, zoom), 1000);
-
-                movePointProjected(draggedPointIndex, px, py);
-            } else {
-                centerX -= dx / zoom;
-                centerY -= dy / zoom;
-            }
-            
-            prevMouseDownPos = {
-                x: event.offsetX,
-                y: event.offsetY,
-            };
-
-            requestRedraw();
-        }
-    });
-
-    canvas.addEventListener("wheel", (event) => {
-        if (loadedImage === null) return;
-        
-        event.preventDefault();
-
-        const prevZoom = zoom;
-        zoomIndex = Math.min(Math.max(zoomIndex + Math.sign(-event.deltaY) * CONFIG.zoomIndexStep, CONFIG.zoomIndexMin), CONFIG.zoomIndexMax);
-        zoom = Math.pow(2, zoomIndex);
-        centerX += (event.offsetX - canvas.clientWidth / 2) * (1 / prevZoom - 1 / zoom);
-        centerY += (event.offsetY - canvas.clientHeight / 2) * (1 / prevZoom - 1 / zoom);
-        if (mouseDragging && draggedPointIndex !== null) {
-            const px = roundTo(roundTo((event.offsetX + draggedPointOffsetX - canvas.clientWidth / 2) / zoom + centerX, zoom), 1000);
-            const py = roundTo(roundTo((event.offsetY + draggedPointOffsetY - canvas.clientHeight / 2) / zoom + centerY, zoom), 1000);
-
-            movePointProjected(draggedPointIndex, px, py);
-        }
-        
-        requestRedraw();
-    });
-
-    canvas.addEventListener("keydown", (event) => {
-        if (loadedImage !== null)  {
-            if (state.selectedPoint !== null || state.selectedLine !== null) {
-                if (event.key === "Backspace" || event.key === "Delete") {
-                    event.preventDefault();
-    
-                    if (state.selectedPoint !== null) {
-                        removePoint(state.selectedPoint);
-                    } else {
-                        removeLine(state.selectedLine);
-                    }
-    
-                    requestRedraw();
-                }
-            }
-
-            if (state.selectedPoint !== null) {
-                for (const [key, dsx, dsy] of [["ArrowDown", 0, 1], ["ArrowUp", 0, -1], ["ArrowRight", 1, 0], ["ArrowLeft", -1, 0]]) {
-                    if (event.key === key) {
-                        event.preventDefault();
-    
-                        const point = state.points[state.selectedPoint];
-    
-                        const px = roundTo(roundTo(point.px + dsx / zoom, zoom), 1000);
-                        const py = roundTo(roundTo(point.py + dsy / zoom, zoom), 1000);
-    
-                        movePointProjected(state.selectedPoint, px, py);
-    
-                        requestRedraw();
-                    }
-                }
-            }
-        }
-    });
-
     window.addEventListener("keydown", (event) => {
-        if (loadedImage !== null && state.selectedPoint !== null) {
+        if (state.selectedPoint !== null) {
             if (event.key === "w") {
                 event.preventDefault();
     
@@ -2051,45 +2471,66 @@ window.addEventListener("load", () => {
     function requestRedraw() {
         window.requestAnimationFrame(redraw);
 
-        const imageLoaded = loadedImage !== null;
-        pointSelect.disabled = !imageLoaded;
-        while (pointSelect.length < state.points.length + 1) {
-            const option = document.createElement("option");
-            option.innerText = `${pointSelect.length - 1}`;
-            pointSelect.add(option);
-        }
-        while (pointSelect.length > state.points.length + 1) {
-            pointSelect.remove(pointSelect.length - 1);
-        }
-        pointSelect.selectedIndex = imageLoaded ? (state.selectedPoint !== null ? state.selectedPoint + 1 : 0) : 0;
+        /**
+         * 
+         * @param {HTMLSelectElement} select 
+         * @param {[number, number] | null} selected 
+         */
+        function fillSelectOptions(select, key, selected) {
+            select.selectedIndex = 0;
 
-        const pointSelected = imageLoaded && state.selectedPoint !== null;
+            let optionIndex = 1;
+            for (let frameIndex = 0; frameIndex < state.frames.length; frameIndex++) {
+                for (let objIndex = 0; objIndex < state.frames[frameIndex][key].length; objIndex++) {
+                    const text = `${frameIndex}-${objIndex}`;
+                    if (optionIndex < select.length) {
+                        select[optionIndex].innerText = text;
+                    } else {
+                        const option = document.createElement("option");
+                        option.innerText = text;
+                        select.add(option);
+                    }
+
+                    if (selected !== null && selected[0] === frameIndex && selected[1] === objIndex) {
+                        select.selectedIndex = optionIndex;
+                    }
+
+                    optionIndex += 1;
+                }
+            }
+
+            while (select.length > optionIndex) {
+                select.remove(select.length - 1);
+            }
+        }
+
+        fillSelectOptions(pointSelect, "points", state.selectedPoint);
+
+        const pointSelected = state.selectedPoint !== null;
         worldPosXInput.disabled = !pointSelected;
-        worldPosXInput.value = pointSelected ? state.points[state.selectedPoint].wx : "";
+        worldPosXInput.value = pointSelected ? state.frames[state.selectedPoint[0]].points[state.selectedPoint[1]].wx : "";
         worldPosYInput.disabled = !pointSelected;
-        worldPosYInput.value = pointSelected ? state.points[state.selectedPoint].wy : "";
+        worldPosYInput.value = pointSelected ? state.frames[state.selectedPoint[0]].points[state.selectedPoint[1]].wy : "";
         worldPosZInput.disabled = !pointSelected;
-        worldPosZInput.value = pointSelected ? state.points[state.selectedPoint].wz : "";
+        worldPosZInput.value = pointSelected ? state.frames[state.selectedPoint[0]].points[state.selectedPoint[1]].wz : "";
 
         worldPosCopyInput.disabled = !pointSelected;
 
         projectedPosXInput.disabled = !pointSelected;
-        projectedPosXInput.value = pointSelected ? state.points[state.selectedPoint].px : "";
+        projectedPosXInput.value = pointSelected ? state.frames[state.selectedPoint[0]].points[state.selectedPoint[1]].px : "";
         projectedPosYInput.disabled = !pointSelected;
-        projectedPosYInput.value = pointSelected ? state.points[state.selectedPoint].py : "";
+        projectedPosYInput.value = pointSelected ? state.frames[state.selectedPoint[0]].points[state.selectedPoint[1]].py : "";
 
         projectedPosCopyInput.disabled = !pointSelected;
 
-        lineSelect.disabled = !imageLoaded;
-        while (lineSelect.length < state.lines.length + 1) {
-            const option = document.createElement("option");
-            option.innerText = `${lineSelect.length - 1}`;
-            lineSelect.add(option);
+        fillSelectOptions(lineSelect, "lines", state.selectedLine);
+
+        for (let frameIndex = 0; frameIndex < frames.length; frameIndex++) {
+            frames[frameIndex].imageNameLabel.innerText = state.frames[frameIndex].name;
         }
-        while (lineSelect.length > state.lines.length + 1) {
-            lineSelect.remove(lineSelect.length - 1);
-        }
-        lineSelect.selectedIndex = imageLoaded ? (state.selectedLine !== null ? state.selectedLine + 1 : 0) : 0;
+
+        brightnessInput.value = brightnessFunctionInv(state.brightness);
+        brightnessValueLabel.innerText = `${state.brightness}x`;
 
         showGridInput.checked = state.showGrid;
         showBlurInput.checked = state.showBlur;
@@ -2137,275 +2578,319 @@ window.addEventListener("load", () => {
     }
 
     function redraw() {
-        canvas.width = canvas.clientWidth;
-        canvas.height = canvas.clientHeight;
+        const framesElementRect = divFrames.getBoundingClientRect();
 
-        context.setTransform(1, 0, 0, 1, 0, 0);
-        context.clearRect(0, 0, canvas.width, canvas.height);
+        for (let frameIndex = 0; frameIndex < frames.length; frameIndex++) {
+            const frame = frames[frameIndex];
+            const canvas = frame.canvas;
+            const context = frame.context;
 
-        if (loadedImage === null) return;
-        
-        context.translate(canvas.width / 2, canvas.height / 2);
-        context.scale(zoom, zoom);
-        context.translate(-roundPx(centerX), -roundPx(centerY));
+            // const canvasRect = canvas.getBoundingClientRect();
 
-        context.imageSmoothingEnabled = state.showBlur;
-        context.drawImage(loadedImage, 0, 0, loadedImage.width, loadedImage.height);
+            // if (
+            //     canvasRect.right < framesElementRect.left ||
+            //     canvasRect.left > framesElementRect.right ||
+            //     canvasRect.bottom < framesElementRect.top ||
+            //     canvasRect.top > framesElementRect.bottom
+            // ) {
+            //     continue;
+            // }
 
-        if (state.showGrid && zoom >= 8) {
-            const minX = Math.max(Math.floor(floorPx(centerX - canvas.width / 2 / zoom)), 0);
-            const maxX = Math.min(Math.ceil(ceilPx(centerX + canvas.width / 2 / zoom)), loadedImage.width);
-            const minY = Math.max(Math.floor(floorPx(centerY - canvas.height / 2 / zoom)), 0);
-            const maxY = Math.min(Math.ceil(ceilPx(centerY + canvas.height / 2 / zoom)), loadedImage.height);
+            canvas.width = canvas.clientWidth;
+            canvas.height = canvas.clientHeight;
 
-            context.beginPath();
+            context.setTransform(1, 0, 0, 1, 0, 0);
+            context.clearRect(0, 0, canvas.width, canvas.height);
 
-            for (let x = minX; x <= maxX; x++) {
-                context.moveTo(x, minY);
-                context.lineTo(x, maxY);
-            }
-
-            for (let y = minY; y <= maxY; y++) {
-                context.moveTo(minX, y);
-                context.lineTo(maxX, y);
-            }
-
-            context.lineWidth = 1 / zoom;
-            context.strokeStyle = "#aaa";
-            context.setLineDash([1 / zoom])
-            context.stroke();
-        }
-        context.setLineDash([]);
-        
-        function drawPoint(centerPath, outlinePath, smallOutlinePath, outlineEdgePath, px, py, selected, small) {
-            centerPath.addPath((() => {
-                const path = new Path2D();
-                path.arc(px, py, 1 / zoom, 0, 2 * Math.PI);
-                return path;
-            })());
-
-            if (selected) {
-                const outerRadius = !small ? CONFIG.pointOuterRadius : CONFIG.pointOuterRadius - (CONFIG.pointOuterRadius - CONFIG.pointInnerRadius - CONFIG.pointEdgeWidth * 2) * 0.5;
-
-                (small ? smallOutlinePath : outlinePath).addPath((() => {
-                    const path = new Path2D();
-                    path.arc(px, py, (CONFIG.pointInnerRadius + outerRadius) * 0.5 / zoom, 0, 2 * Math.PI);
-                    return path;
-                })());
-                
-                outlineEdgePath.addPath((() => {
-                    const path = new Path2D();
-                    path.arc(px, py, (CONFIG.pointInnerRadius + CONFIG.pointEdgeWidth * 0.5) / zoom, 0, 2 * Math.PI);
-                    return path;
-                })());
-                
-                outlineEdgePath.addPath((() => {
-                    const path = new Path2D();
-                    path.arc(px, py, (outerRadius - CONFIG.pointEdgeWidth * 0.5) / zoom, 0, 2 * Math.PI);
-                    return path;
-                })());
-            } else {
-                outlineEdgePath.addPath((() => {
-                    const path = new Path2D();
-                    path.arc(px, py, (CONFIG.pointInnerRadius + CONFIG.pointEdgeWidth * 0.5) / zoom, 0, 2 * Math.PI);
-                    return path;
-                })());
-            }
-        }
-
-        const projectedCenterPath = new Path2D();
-        const projectedOutlinePath = new Path2D();
-        const projectedSmallOutlinePath = new Path2D();
-
-        const centerPath = new Path2D();
-        const outlinePath = new Path2D();
-        const smallOutlinePath = new Path2D();
-
-        const outlineEdgePath = new Path2D();
-
-        for (let i = 0; i < state.points.length; i++) {
-            const selected = state.selectedPoint === i || state.selectedLine !== null && state.lines[state.selectedLine].points.includes(i);
-            const small = selected && state.selectedPoint !== i;
+            if (frame.image === null) continue;
             
-            const point = state.points[i];
-            drawPoint(centerPath, outlinePath, smallOutlinePath, outlineEdgePath, point.px, point.py, selected, small);
+            context.translate(canvas.width / 2, canvas.height / 2);
+            context.scale(zoom, zoom);
+            context.translate(-roundPx(centerX), -roundPx(centerY));
 
-            if (state.showProjected) {
-                const [ ppx, ppy ] = project([ state.offsetBy01, loadedImage.width, loadedImage.height ], [ state.cameraX, state.cameraY, state.cameraZ, state.cameraYaw * (Math.PI / 180), state.cameraPitch * (Math.PI / 180), state.cameraFov * (Math.PI / 180), state.padTop + state.padBottom, (state.padRight - state.padLeft) / 2, (state.padBottom - state.padTop) / 2 ], [ point.wx, point.wy, point.wz ]);
-                drawPoint(projectedCenterPath, projectedOutlinePath, projectedSmallOutlinePath, outlineEdgePath, ppx, ppy, selected, small);
-            }
-        }
+            context.imageSmoothingEnabled = state.showBlur;
+            context.drawImage(frame.offscreenCanvas, 0, 0, imageWidth, imageHeight);
 
-        /**
-         * 
-         * @param {Path2D} linePath 
-         * @param {Line} line 
-         * @param {number[]} splitPath 
-         * @param {number[]} oppositeSplitPath 
-         */
-        function drawSplitPath(linePath, line, splitPath, oppositeSplitPath) {
-            const firstPixel = line.pixels[splitPath[0]];
-            const lastPixel = line.pixels[splitPath[splitPath.length - 1]]
-            const firstOppositePixel = line.pixels[oppositeSplitPath[0]];
-            const lastOppositePixel = line.pixels[oppositeSplitPath[oppositeSplitPath.length - 1]]
+            if (state.showGrid && zoom >= 8) {
+                const minX = Math.max(Math.floor(floorPx(centerX - canvas.width / 2 / zoom)), 0);
+                const maxX = Math.min(Math.ceil(ceilPx(centerX + canvas.width / 2 / zoom)), imageWidth);
+                const minY = Math.max(Math.floor(floorPx(centerY - canvas.height / 2 / zoom)), 0);
+                const maxY = Math.min(Math.ceil(ceilPx(centerY + canvas.height / 2 / zoom)), imageHeight);
 
-            const startDirX = lastOppositePixel.px - firstPixel.px;
-            const startDirY = lastOppositePixel.py - firstPixel.py;
-            const startDirLen = Math.sqrt(startDirX * startDirX + startDirY * startDirY);
+                context.beginPath();
 
-            const endDirX = lastPixel.px - firstOppositePixel.px;
-            const endDirY = lastPixel.py - firstOppositePixel.py;
-            const endDirLen = Math.sqrt(endDirX * endDirX + endDirY * endDirY);
-
-            linePath.moveTo((firstPixel.px + 0.5) - startDirX / startDirLen * 1000, (firstPixel.py + 0.5) - startDirY / startDirLen * 1000);
-            for (let i = 0; i < splitPath.length; i++) {
-                const pixel = line.pixels[splitPath[i]];
-                linePath.lineTo(pixel.px + 0.5, pixel.py + 0.5);
-            }
-            linePath.lineTo((lastPixel.px + 0.5) + endDirX / endDirLen * 1000, (lastPixel.py + 0.5) + endDirY / endDirLen * 1000);
-        }
-
-        const lineCenterPath = new Path2D();
-        const selectedLineCenterPath = new Path2D();
-        const lineSplitPath = new Path2D();
-        const pixelEmptyPath = new Path2D();
-        const pixelFilledPath = new Path2D();
-
-        for (let i = 0; i < state.lines.length; i++) {
-            const line = state.lines[i];
-            const lineData = linesData[i];
-
-            const abc = calculateBestLineABCNorm(i);
-            if (abc !== null) {
-                const { a, b, c } = abc;
-
-                let x1, y1, x2, y2;
-
-                // line is mostly horizontal
-                if (a * a < loadedImage.width / loadedImage.height) {
-                    x1 = 0;
-                    y1 = -(a * x1 + c) / b;
-                    if (y1 < 0) {
-                        y1 = 0;
-                        x1 = -(b * y1 + c) / a;
-                    } else if (y1 > loadedImage.height) {
-                        y1 = loadedImage.height;
-                        x1 = -(b * y1 + c) / a;
-                    }
-                    x2 = loadedImage.width;
-                    y2 = -(a * x2 + c) / b;
-                    if (y2 < 0) {
-                        y2 = 0;
-                        x2 = -(b * y2 + c) / a;
-                    } else if (y2 > loadedImage.height) {
-                        y2 = loadedImage.height;
-                        x2 = -(b * y2 + c) / a;
-                    }
-                } else {
-                    y1 = 0;
-                    x1 = -(b * y1 + c) / a;
-                    if (x1 < 0) {
-                        x1 = 0;
-                        y1 = -(a * x1 + c) / b;
-                    } else if (x1 > loadedImage.width) {
-                        x1 = loadedImage.width;
-                        y1 = -(a * x1 + c) / b;
-                    }
-                    y2 = loadedImage.height;
-                    x2 = -(b * y2 + c) / a;
-                    if (x2 < 0) {
-                        x2 = 0;
-                        y2 = -(a * x2 + c) / b;
-                    } else if (x2 > loadedImage.width) {
-                        x2 = loadedImage.width;
-                        y2 = -(a * x2 + c) / b;
-                    }
+                for (let x = minX; x <= maxX; x++) {
+                    context.moveTo(x, minY);
+                    context.lineTo(x, maxY);
                 }
 
-                const path = i === state.selectedLine ? selectedLineCenterPath : lineCenterPath;
-                path.moveTo(x1, y1);
-                path.lineTo(x2, y2);
+                for (let y = minY; y <= maxY; y++) {
+                    context.moveTo(minX, y);
+                    context.lineTo(maxX, y);
+                }
+
+                context.lineWidth = 1 / zoom;
+                context.strokeStyle = "#aaa";
+                context.setLineDash([1 / zoom])
+                context.stroke();
             }
+            context.setLineDash([]);
             
-            if (i === state.selectedLine) {
-                for (const pixel of line.pixels) {
-                    (pixel.filled ? pixelFilledPath : pixelEmptyPath).addPath((() => {
+            function drawPoint(centerPath, outlinePath, smallOutlinePath, outlineEdgePath, px, py, selected, small) {
+                centerPath.addPath((() => {
+                    const path = new Path2D();
+                    path.arc(px, py, 1 / zoom, 0, 2 * Math.PI);
+                    return path;
+                })());
+
+                if (selected) {
+                    const outerRadius = !small ? CONFIG.pointOuterRadius : CONFIG.pointOuterRadius - (CONFIG.pointOuterRadius - CONFIG.pointInnerRadius - CONFIG.pointEdgeWidth * 2) * 0.5;
+
+                    (small ? smallOutlinePath : outlinePath).addPath((() => {
                         const path = new Path2D();
-                        path.moveTo(pixel.px + 0.25, pixel.py + 0.25);
-                        path.lineTo(pixel.px + 0.75, pixel.py + 0.75);
-                        path.moveTo(pixel.px + 0.75, pixel.py + 0.25);
-                        path.lineTo(pixel.px + 0.25, pixel.py + 0.75);
+                        path.arc(px, py, (CONFIG.pointInnerRadius + outerRadius) * 0.5 / zoom, 0, 2 * Math.PI);
+                        return path;
+                    })());
+                    
+                    outlineEdgePath.addPath((() => {
+                        const path = new Path2D();
+                        path.arc(px, py, (CONFIG.pointInnerRadius + CONFIG.pointEdgeWidth * 0.5) / zoom, 0, 2 * Math.PI);
+                        return path;
+                    })());
+                    
+                    outlineEdgePath.addPath((() => {
+                        const path = new Path2D();
+                        path.arc(px, py, (outerRadius - CONFIG.pointEdgeWidth * 0.5) / zoom, 0, 2 * Math.PI);
+                        return path;
+                    })());
+                } else {
+                    outlineEdgePath.addPath((() => {
+                        const path = new Path2D();
+                        path.arc(px, py, (CONFIG.pointInnerRadius + CONFIG.pointEdgeWidth * 0.5) / zoom, 0, 2 * Math.PI);
                         return path;
                     })());
                 }
+            }
 
-                if (lineData !== null) {
-                    drawSplitPath(lineSplitPath, line, lineData.emptySplitPath, lineData.filledSplitPath);
-                    drawSplitPath(lineSplitPath, line, lineData.filledSplitPath, lineData.emptySplitPath);
+            const projectedCenterPath = new Path2D();
+            const projectedOutlinePath = new Path2D();
+            const projectedSmallOutlinePath = new Path2D();
+
+            const centerPath = new Path2D();
+            const outlinePath = new Path2D();
+            const smallOutlinePath = new Path2D();
+
+            const outlineEdgePath = new Path2D();
+
+            for (let pointIndex = 0; pointIndex < state.frames[frameIndex].points.length; pointIndex++) {
+                let worldPosSelected = false;
+                if (state.selectedPoint !== null) {
+                    const { wx, wy, wz } = state.frames[state.selectedPoint[0]].points[state.selectedPoint[1]];
+                    if (
+                        state.frames[frameIndex].points[pointIndex].wx === wx && 
+                        state.frames[frameIndex].points[pointIndex].wy === wy && 
+                        state.frames[frameIndex].points[pointIndex].wz === wz
+                    ) {
+                        worldPosSelected = true;
+                    }
+                }
+                if (state.selectedLine !== null) {
+                    for (const linePointIndex of state.frames[state.selectedLine[0]].lines[state.selectedLine[1]]) {
+                        const { wx, wy, wz } = state.frames[state.selectedLine[0]].points[linePointIndex];
+                        if (
+                            state.frames[frameIndex].points[pointIndex].wx === wx && 
+                            state.frames[frameIndex].points[pointIndex].wy === wy && 
+                            state.frames[frameIndex].points[pointIndex].wz === wz
+                        ) {
+                            worldPosSelected = true;
+                        }
+                    }
+                }
+                const selected = worldPosSelected;
+                const small = selected && !(state.selectedPoint !== null && state.selectedPoint[0] === frameIndex && state.selectedPoint[1] === pointIndex);
+                
+                const point = state.frames[frameIndex].points[pointIndex];
+                drawPoint(centerPath, outlinePath, smallOutlinePath, outlineEdgePath, point.px, point.py, selected, small);
+
+                if (state.showProjected) {
+                    const [ ppx, ppy ] = project([ state.offsetBy01, imageWidth, imageHeight ], [ state.cameraX, state.cameraY, state.cameraZ, state.cameraYaw * (Math.PI / 180), state.cameraPitch * (Math.PI / 180), state.cameraFov * (Math.PI / 180), state.padTop + state.padBottom, (state.padRight - state.padLeft) / 2, (state.padBottom - state.padTop) / 2 ], [ point.wx, point.wy, point.wz ]);
+                    drawPoint(projectedCenterPath, projectedOutlinePath, projectedSmallOutlinePath, outlineEdgePath, ppx, ppy, selected, small);
                 }
             }
-        }
 
-        if (state.selectedPoint !== null) {
-            // const polygon = calculatePointPolygon(state.selectedPoint);
+            /**
+             * 
+             * @param {Path2D} linePath 
+             * @param {Line} line 
+             * @param {number[]} splitPath 
+             * @param {number[]} oppositeSplitPath 
+             */
+            function drawSplitPath(linePath, line, splitPath, oppositeSplitPath) {
+                const firstPixel = line.pixels[splitPath[0]];
+                const lastPixel = line.pixels[splitPath[splitPath.length - 1]]
+                const firstOppositePixel = line.pixels[oppositeSplitPath[0]];
+                const lastOppositePixel = line.pixels[oppositeSplitPath[oppositeSplitPath.length - 1]]
 
-            // context.moveTo(polygon[0].x, polygon[0].y);
-            // for (let i = 1; i < polygon.length; i++) {
-            //     context.lineTo(polygon[i].x, polygon[i].y);
-            // }
-            // context.closePath();
+                const startDirX = lastOppositePixel.px - firstPixel.px;
+                const startDirY = lastOppositePixel.py - firstPixel.py;
+                const startDirLen = Math.sqrt(startDirX * startDirX + startDirY * startDirY);
 
-            // context.fillStyle = "#ff0b";
-            // context.fill();
-        }
-        
-        context.lineWidth = 1 / zoom;
-        context.strokeStyle = "#00fb";
-        context.stroke(lineSplitPath);
-        
-        context.lineWidth = 1 / zoom;
-        context.strokeStyle = "#f00b";
-        context.stroke(pixelEmptyPath);
-        
-        context.lineWidth = 1 / zoom;
-        context.strokeStyle = "#0f0b";
-        context.stroke(pixelFilledPath);
-        
-        context.lineWidth = 1 / zoom;
-        context.strokeStyle = "#f904";
-        context.stroke(lineCenterPath);
-        
-        context.lineWidth = 1 / zoom;
-        context.strokeStyle = "#f90b";
-        context.stroke(selectedLineCenterPath);
-        
-        context.lineWidth = CONFIG.pointEdgeWidth / zoom;
-        context.strokeStyle = "#222b";
-        context.stroke(outlineEdgePath);
+                const endDirX = lastPixel.px - firstOppositePixel.px;
+                const endDirY = lastPixel.py - firstOppositePixel.py;
+                const endDirLen = Math.sqrt(endDirX * endDirX + endDirY * endDirY);
 
-        if (state.showProjected) {
-            context.fillStyle = "#00f";
-            context.fill(projectedCenterPath);
+                linePath.moveTo((firstPixel.px + 0.5) - startDirX / startDirLen * 1000, (firstPixel.py + 0.5) - startDirY / startDirLen * 1000);
+                for (let i = 0; i < splitPath.length; i++) {
+                    const pixel = line.pixels[splitPath[i]];
+                    linePath.lineTo(pixel.px + 0.5, pixel.py + 0.5);
+                }
+                linePath.lineTo((lastPixel.px + 0.5) + endDirX / endDirLen * 1000, (lastPixel.py + 0.5) + endDirY / endDirLen * 1000);
+            }
+
+            const lineCenterPath = new Path2D();
+            const selectedLineCenterPath = new Path2D();
+            const lineSplitPath = new Path2D();
+            const pixelEmptyPath = new Path2D();
+            const pixelFilledPath = new Path2D();
+
+            for (let lineIndex = 0; lineIndex < state.frames[frameIndex].lines.length; lineIndex++) {
+                const line = state.frames[frameIndex].lines[lineIndex];
+                const lineData = linesData[lineIndex];
+
+                const lineSelected = state.selectedLine !== null && state.selectedLine[0] === frameIndex && state.selectedLine[1] === lineIndex;
+
+                const abc = calculateBestLineABCNorm(frameIndex, lineIndex);
+                if (abc !== null) {
+                    const { a, b, c } = abc;
+
+                    let x1, y1, x2, y2;
+
+                    // line is mostly horizontal
+                    if (a * a < image.width / image.height) {
+                        x1 = 0;
+                        y1 = -(a * x1 + c) / b;
+                        if (y1 < 0) {
+                            y1 = 0;
+                            x1 = -(b * y1 + c) / a;
+                        } else if (y1 > image.height) {
+                            y1 = image.height;
+                            x1 = -(b * y1 + c) / a;
+                        }
+                        x2 = image.width;
+                        y2 = -(a * x2 + c) / b;
+                        if (y2 < 0) {
+                            y2 = 0;
+                            x2 = -(b * y2 + c) / a;
+                        } else if (y2 > image.height) {
+                            y2 = image.height;
+                            x2 = -(b * y2 + c) / a;
+                        }
+                    } else {
+                        y1 = 0;
+                        x1 = -(b * y1 + c) / a;
+                        if (x1 < 0) {
+                            x1 = 0;
+                            y1 = -(a * x1 + c) / b;
+                        } else if (x1 > image.width) {
+                            x1 = image.width;
+                            y1 = -(a * x1 + c) / b;
+                        }
+                        y2 = image.height;
+                        x2 = -(b * y2 + c) / a;
+                        if (x2 < 0) {
+                            x2 = 0;
+                            y2 = -(a * x2 + c) / b;
+                        } else if (x2 > image.width) {
+                            x2 = image.width;
+                            y2 = -(a * x2 + c) / b;
+                        }
+                    }
+
+                    const path = lineSelected ? selectedLineCenterPath : lineCenterPath;
+                    path.moveTo(x1, y1);
+                    path.lineTo(x2, y2);
+                }
+                
+                if (lineSelected) {
+                    for (const pixel of line.pixels) {
+                        (pixel.filled ? pixelFilledPath : pixelEmptyPath).addPath((() => {
+                            const path = new Path2D();
+                            path.moveTo(pixel.px + 0.25, pixel.py + 0.25);
+                            path.lineTo(pixel.px + 0.75, pixel.py + 0.75);
+                            path.moveTo(pixel.px + 0.75, pixel.py + 0.25);
+                            path.lineTo(pixel.px + 0.25, pixel.py + 0.75);
+                            return path;
+                        })());
+                    }
+
+                    if (lineData !== null) {
+                        drawSplitPath(lineSplitPath, line, lineData.emptySplitPath, lineData.filledSplitPath);
+                        drawSplitPath(lineSplitPath, line, lineData.filledSplitPath, lineData.emptySplitPath);
+                    }
+                }
+            }
+
+            if (state.selectedPoint !== null) {
+                // const polygon = calculatePointPolygon(state.selectedPoint);
+
+                // context.moveTo(polygon[0].x, polygon[0].y);
+                // for (let i = 1; i < polygon.length; i++) {
+                //     context.lineTo(polygon[i].x, polygon[i].y);
+                // }
+                // context.closePath();
+
+                // context.fillStyle = "#ff0b";
+                // context.fill();
+            }
+            
+            context.lineWidth = 1 / zoom;
+            context.strokeStyle = "#00fb";
+            context.stroke(lineSplitPath);
+            
+            context.lineWidth = 1 / zoom;
+            context.strokeStyle = "#f00b";
+            context.stroke(pixelEmptyPath);
+            
+            context.lineWidth = 1 / zoom;
+            context.strokeStyle = "#0f0b";
+            context.stroke(pixelFilledPath);
+            
+            context.lineWidth = 1 / zoom;
+            context.strokeStyle = "#f904";
+            context.stroke(lineCenterPath);
+            
+            context.lineWidth = 1 / zoom;
+            context.strokeStyle = "#f90b";
+            context.stroke(selectedLineCenterPath);
+            
+            context.lineWidth = CONFIG.pointEdgeWidth / zoom;
+            context.strokeStyle = "#222b";
+            context.stroke(outlineEdgePath);
+
+            if (state.showProjected) {
+                context.fillStyle = "#00f";
+                context.fill(projectedCenterPath);
+
+                context.lineWidth = (CONFIG.pointOuterRadius - CONFIG.pointInnerRadius - CONFIG.pointEdgeWidth * 2) / zoom;
+                context.strokeStyle = "#0afb";
+                context.stroke(projectedOutlinePath);
+
+                context.lineWidth = (CONFIG.pointOuterRadius - CONFIG.pointInnerRadius - CONFIG.pointEdgeWidth * 2) * 0.5 / zoom;
+                context.strokeStyle = "#0afb";
+                context.stroke(projectedSmallOutlinePath);
+            }
+
+            context.fillStyle = "#f00";
+            context.fill(centerPath);
 
             context.lineWidth = (CONFIG.pointOuterRadius - CONFIG.pointInnerRadius - CONFIG.pointEdgeWidth * 2) / zoom;
-            context.strokeStyle = "#0afb";
-            context.stroke(projectedOutlinePath);
+            context.strokeStyle = "#0f0b";
+            context.stroke(outlinePath);
 
             context.lineWidth = (CONFIG.pointOuterRadius - CONFIG.pointInnerRadius - CONFIG.pointEdgeWidth * 2) * 0.5 / zoom;
-            context.strokeStyle = "#0afb";
-            context.stroke(projectedSmallOutlinePath);
+            context.strokeStyle = "#0f0b";
+            context.stroke(smallOutlinePath);
         }
-
-        context.fillStyle = "#f00";
-        context.fill(centerPath);
-
-        context.lineWidth = (CONFIG.pointOuterRadius - CONFIG.pointInnerRadius - CONFIG.pointEdgeWidth * 2) / zoom;
-        context.strokeStyle = "#0f0b";
-        context.stroke(outlinePath);
-
-        context.lineWidth = (CONFIG.pointOuterRadius - CONFIG.pointInnerRadius - CONFIG.pointEdgeWidth * 2) * 0.5 / zoom;
-        context.strokeStyle = "#0f0b";
-        context.stroke(smallOutlinePath);
 
         // errorCanvas.width = errorCanvas.clientWidth / 4;
         // errorCanvas.height = errorCanvas.clientHeight / 4;
