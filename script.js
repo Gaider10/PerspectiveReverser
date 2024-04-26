@@ -3147,13 +3147,19 @@ window.addEventListener("load", () => {
             context.lineWidth = 1 / zoom;
             context.strokeStyle = "#ccc";
 
-            context.strokeRect(-state.padLeft - 0.5 / zoom, -state.padTop - 0.5 / zoom, state.padLeft + imageWidth + state.padRight + 1 / zoom, state.padTop + imageHeight + state.padBottom + 1 / zoom);
-
             context.drawImage(frame.offscreenCanvas, 0, 0, imageWidth, imageHeight);
             
+            
             {
-                const centerX = imageWidth / 2 + (state.padRight - state.padLeft) / 2;
-                const centerY = imageHeight / 2 + (state.padBottom - state.padTop) / 2;
+                const time = state.frames[frameIndex].time - state.frames[state.mainFrameIndex].time;
+                const centerX = imageWidth / 2 + (state.padRight - state.padLeft) / 2 + state.centerSpeedX * time;
+                const centerY = imageHeight / 2 + (state.padBottom - state.padTop) / 2 + state.centerSpeedY * time;
+                const stateZoom = Math.pow(state.zoomSpeed, time);
+                const width = (state.padLeft + imageWidth + state.padRight) / stateZoom;
+                const height = (state.padTop + imageHeight + state.padBottom) / stateZoom;
+
+                context.strokeRect(centerX - width / 2 - 0.5 / zoom, centerY - height / 2 - 0.5 / zoom, width + 1 / zoom, height + 1 / zoom);
+
                 context.beginPath();
                 context.moveTo(centerX - 8, centerY);
                 context.lineTo(centerX + 8, centerY);
