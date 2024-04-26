@@ -9,132 +9,126 @@ const CONFIG = {
     pointEdgeWidth: 2,
 };
 
-function project(constants, variables, worldPoint) {
-    const [ offsetBy0_1, imageSizeX, imageSizeY ] = constants;
-    const [ x, y, z, yaw, pitch, fov, padV, offsetX, offsetY ] = variables;
+function project(constants, variables, frameIndex, worldPoint) {
+    const [ offsetBy0_1, imageSizeY ] = constants;
+    const [ cameraX, cameraY, cameraZ, cameraSpeedX, cameraSpeedY, cameraSpeedZ, cameraSpeedW, cameraSpeedF, cameraSpeedR, cameraYaw, cameraPitch, cameraFov, padV, centerX, centerY, ...times ] = variables;
+    const time = times[frameIndex];
 
-    const fullImageSizeX = imageSizeX;
     const fullImageSizeY = imageSizeY + padV;
     
-    const sinYaw = Math.sin(yaw);
-    const cosYaw = Math.cos(yaw);
-    const sinPitch = Math.sin(-pitch);
-    const cosPitch = Math.cos(-pitch);
+    const sinYaw = Math.sin(cameraYaw);
+    const cosYaw = Math.cos(cameraYaw);
+    const sinPitch = Math.sin(-cameraPitch);
+    const cosPitch = Math.cos(-cameraPitch);
 
-    const f = 1 / Math.tan(fov * 0.5);
-    const aspectRatioInv = fullImageSizeY / fullImageSizeX;
-
-    // const viewDistance = 8 * 16 * 4;
-    // const cameraDepth = 0.05;
-    // const zm = (viewDistance + cameraDepth) / (cameraDepth - viewDistance);
-    // const za = 2 * viewDistance * cameraDepth / (cameraDepth - viewDistance);
+    const f = 1 / Math.tan(cameraFov * 0.5);
 
     const [ x0, y0, z0 ] = worldPoint;
 
     // Translate by -camera_pos
-    const x1 = x0 - x;
-    const y1 = y0 - y;
-    const z1 = z0 - z;
+    const x1 = x0 - (cameraX + cameraSpeedX * time);
+    const y1 = y0 - (cameraY + cameraSpeedY * time);
+    const z1 = z0 - (cameraZ + cameraSpeedZ * time);
 
     // Rotate around Y by yaw
-    const x2 = x1 * cosYaw + z1 * sinYaw;
+    const x2 = x1 * cosYaw + z1 * sinYaw + cameraSpeedR * time;
     const y2 = y1;
-    const z2 = x1 * -sinYaw + z1 * cosYaw;
+    const z2 = x1 * -sinYaw + z1 * cosYaw + cameraSpeedW * time;
     
     // Rotate around X by -pitch
     const x3 = x2;
     const y3 = y2 * cosPitch + z2 * -sinPitch;
-    const z3 = y2 * sinPitch + z2 * cosPitch;
+    const z3 = y2 * sinPitch + z2 * cosPitch + cameraSpeedF * time;
 
-    const x4 = x3 * f * aspectRatioInv;
+    const x4 = x3 * f;
     const y4 = y3 * f;
     // const z4 = z3 * zm + za;
     const w4 = -z3 + (offsetBy0_1 ? -0.1 : 0);
     
     const w4Inv = w4 === 0 ? 0 : 1 / w4;
-    const x5 = (x4 * w4Inv + 1) * (fullImageSizeX * 0.5) + offsetX;
-    const y5 = (y4 * w4Inv + 1) * (fullImageSizeY * 0.5) - (padV / 2 - offsetY);
+    const x5 = x4 * w4Inv * fullImageSizeY * 0.5 + centerX;
+    const y5 = y4 * w4Inv * fullImageSizeY * 0.5 + centerY;
 
     return [ x5, y5 ];
 }
 
-function projectedError(constants, variables, worldPoints, projectedPoints) {
-    const [ offsetBy0_1, imageSizeX, imageSizeY ] = constants;
-    const [ x, y, z, yaw, pitch, fov, padV, offsetX, offsetY ] = variables;
+function projectedError(constants, variables, frames) {
+    const [ offsetBy0_1, imageSizeY ] = constants;
+    const [ cameraX, cameraY, cameraZ, cameraSpeedX, cameraSpeedY, cameraSpeedZ, cameraSpeedW, cameraSpeedF, cameraSpeedR, cameraYaw, cameraPitch, cameraFov, padV, centerX, centerY, ...times ] = variables;
 
-    const fullImageSizeX = imageSizeX;
     const fullImageSizeY = imageSizeY + padV;
     
-    const sinYaw = Math.sin(yaw);
-    const cosYaw = Math.cos(yaw);
-    const sinPitch = Math.sin(-pitch);
-    const cosPitch = Math.cos(-pitch);
+    const sinYaw = Math.sin(cameraYaw);
+    const cosYaw = Math.cos(cameraYaw);
+    const sinPitch = Math.sin(-cameraPitch);
+    const cosPitch = Math.cos(-cameraPitch);
 
-    const f = 1 / Math.tan(fov * 0.5);
-    const aspectRatioInv = fullImageSizeY / fullImageSizeX;
-
-    // const viewDistance = 8 * 16 * 4;
-    // const cameraDepth = 0.05;
-    // const zm = (viewDistance + cameraDepth) / (cameraDepth - viewDistance);
-    // const za = 2 * viewDistance * cameraDepth / (cameraDepth - viewDistance);
+    const f = 1 / Math.tan(cameraFov * 0.5);
 
     let totalError = 0;
+    let pointCount = 0;
 
-    for (let i = 0; i < worldPoints.length; i++) {
-        const [ x0, y0, z0 ] = worldPoints[i];
+    for (let frameIndex = 0; frameIndex < frames.length; frameIndex++) {
+        const frame = frames[frameIndex];
+        const time = times[frameIndex];
 
-        // Translate by -camera_pos
-        const x1 = x0 - x;
-        const y1 = y0 - y;
-        const z1 = z0 - z;
-
-        // Rotate around Y by yaw
-        const x2 = x1 * cosYaw + z1 * sinYaw;
-        const y2 = y1;
-        const z2 = x1 * -sinYaw + z1 * cosYaw;
-        
-        // Rotate around X by -pitch
-        const x3 = x2;
-        const y3 = y2 * cosPitch + z2 * -sinPitch;
-        const z3 = y2 * sinPitch + z2 * cosPitch;
-
-        const x4 = x3 * f * aspectRatioInv;
-        const y4 = y3 * f;
-        // const z4 = z3 * zm + za;
-        const w4 = -z3 + (offsetBy0_1 ? -0.1 : 0);
-
-        const w4Inv = w4 === 0 ? 0 : 1 / w4;
-        const x5 = (x4 * w4Inv + 1) * (fullImageSizeX * 0.5) + offsetX;
-        const y5 = (y4 * w4Inv + 1) * (fullImageSizeY * 0.5) - (padV / 2 - offsetY);
-
-        const [ px, py ] = projectedPoints[i];
-
-        const dpx = x5 - px;
-        const dpy = y5 - py;
-
-        const error = Math.sqrt(dpx * dpx + dpy * dpy);
-
-        totalError += error * error;
+        for (let pointIndex = 0; pointIndex < frames[frameIndex].length; pointIndex++) {
+            const [ x0, y0, z0 ] = frame[pointIndex][0];
+            
+            // Translate by -camera_pos
+            const x1 = x0 - (cameraX + cameraSpeedX * time);
+            const y1 = y0 - (cameraY + cameraSpeedY * time);
+            const z1 = z0 - (cameraZ + cameraSpeedZ * time);
+            
+            // Rotate around Y by yaw
+            const x2 = x1 * cosYaw + z1 * sinYaw + cameraSpeedR * time;
+            const y2 = y1;
+            const z2 = x1 * -sinYaw + z1 * cosYaw + cameraSpeedW * time;
+            
+            // Rotate around X by -pitch
+            const x3 = x2;
+            const y3 = y2 * cosPitch + z2 * -sinPitch;
+            const z3 = y2 * sinPitch + z2 * cosPitch + cameraSpeedF * time;
+    
+            const x4 = x3 * f;
+            const y4 = y3 * f;
+            // const z4 = z3 * zm + za;
+            const w4 = -z3 + (offsetBy0_1 ? -0.1 : 0);
+            
+            const w4Inv = w4 === 0 ? 0 : 1 / w4;
+            const x5 = x4 * w4Inv * fullImageSizeY * 0.5 + centerX;
+            const y5 = y4 * w4Inv * fullImageSizeY * 0.5 + centerY;
+            
+            const [ px, py ] = frame[pointIndex][1];
+    
+            const dpx = x5 - px;
+            const dpy = y5 - py;
+    
+            const error = dpx * dpx + dpy * dpy;
+    
+            totalError += error;
+            pointCount += 1;
+        }
     }
 
-    return Math.sqrt(totalError);
+    return totalError / pointCount;
 }
 
-function reverseProjection(constants, startingVariables, maxSteps, worldPoints, projectedPoints, iterations) {
-    const variables = Array.from(startingVariables);
-    const steps = Array.from(maxSteps);
+function reverseProjection(constants, variablesInitial, variablesLocked, frames, iterations) {
+    const variables = Array.from(variablesInitial);
+    const steps = variablesLocked.map((locked) => locked ? 0 : 1);
 
     for (let i = 0; i < iterations; i++) {
         for (let j = 0; j < variables.length; j++) {
             if (steps[j] === 0) continue;
 
-            let minError = Number.MAX_VALUE;
+            let minError = projectedError(constants, variables, frames);
             let minStepIndex = 0;
 
-            for (let k = -1; k <= 1; k += 1) {
+            for (let k = -1; k <= 1; k += 2) {
                 const value = variables[j];
                 variables[j] += steps[j] * k;
-                const error = projectedError(constants, variables, worldPoints, projectedPoints);
+                const error = projectedError(constants, variables, frames);
                 variables[j] = value;
                 if (error < minError) {
                     minError = error;
@@ -176,6 +170,9 @@ window.addEventListener("load", () => {
     /**
      * @type {{
      *   imageNameLabel: HTMLLabelElement,
+     *   timeInput: HTMLInputElement,
+     *   timeLockedInput: HTMLInputElement,
+     *   mainInput: HTMLInputElement,
      *   moveLeftButton: HTMLButtonElement,
      *   moveRightButton: HTMLButtonElement,
      *   canvas: HTMLCanvasElement,
@@ -216,9 +213,12 @@ window.addEventListener("load", () => {
      * @typedef {{
      *     frames: {
      *         name: string,
+     *         time: number,
+     *         timeLocked: boolean,
      *         points: Point[],
      *         lines: Line[],
      *     }[],
+     *     mainFrameIndex: number | null,
      *     selectedPoint: [number, number] | null,
      *     selectedPointHistory: [number, number][],
      *     selectedLine: [number, number] | null,
@@ -233,6 +233,18 @@ window.addEventListener("load", () => {
      *     cameraYLocked: boolean,
      *     cameraZ: number,
      *     cameraZLocked: boolean,
+     *     cameraSpeedX: number,
+     *     cameraSpeedXLocked: boolean,
+     *     cameraSpeedY: number,
+     *     cameraSpeedYLocked: boolean,
+     *     cameraSpeedZ: number,
+     *     cameraSpeedZLocked: boolean,
+     *     cameraSpeedW: number,
+     *     cameraSpeedWLocked: boolean,
+     *     cameraSpeedF: number,
+     *     cameraSpeedFLocked: boolean,
+     *     cameraSpeedR: number,
+     *     cameraSpeedRLocked: boolean,
      *     cameraYaw: number,
      *     cameraYawLocked: boolean,
      *     cameraPitch: number,
@@ -259,6 +271,7 @@ window.addEventListener("load", () => {
      */
     const defaultState = {
         frames: [],
+        mainFrameIndex: null,
         selectedPoint: null,
         selectedPointHistory: [],
         selectedLine: null,
@@ -273,6 +286,18 @@ window.addEventListener("load", () => {
         cameraYLocked: false,
         cameraZ: 0,
         cameraZLocked: false,
+        cameraSpeedX: 0,
+        cameraSpeedXLocked: true,
+        cameraSpeedY: 0,
+        cameraSpeedYLocked: true,
+        cameraSpeedZ: 0,
+        cameraSpeedZLocked: true,
+        cameraSpeedW: 0,
+        cameraSpeedWLocked: true,
+        cameraSpeedF: 0,
+        cameraSpeedFLocked: true,
+        cameraSpeedR: 0,
+        cameraSpeedRLocked: true,
         cameraYaw: 0,
         cameraYawLocked: false,
         cameraPitch: 0,
@@ -361,12 +386,32 @@ window.addEventListener("load", () => {
         frame.moveRightButton.disabled = frameIndex === divFrames.children.length - 2;
     }
 
+    function setMainFrame(frameIndex) {
+        if (frameIndex === state.mainFrameIndex) return;
+
+        const prevMainFrameIndex = state.mainFrameIndex;
+        state.mainFrameIndex = frameIndex;
+        if (frameIndex === null || prevMainFrameIndex === null) return;
+
+        const deltaTime = state.frames[frameIndex].time - state.frames[prevMainFrameIndex].time;
+
+        const sinYaw = Math.sin(state.cameraYaw * (Math.PI / 180));
+        const cosYaw = Math.cos(state.cameraYaw * (Math.PI / 180));
+        const sinPitch = Math.sin(state.cameraPitch * (Math.PI / 180));
+        const cosPitch = Math.cos(state.cameraPitch * (Math.PI / 180));
+
+        state.cameraX += (state.cameraSpeedX - state.cameraSpeedW * sinYaw - state.cameraSpeedF * sinYaw * cosPitch - state.cameraSpeedR * cosYaw) * deltaTime;
+        state.cameraY += (state.cameraSpeedY + state.cameraSpeedF * sinPitch) * deltaTime;
+        state.cameraZ += (state.cameraSpeedZ + state.cameraSpeedW * cosYaw + state.cameraSpeedF * cosYaw * cosPitch - state.cameraSpeedR * sinYaw) * deltaTime;
+    }
+
     /**
      * 
      */
     function addFrame() {
         const frameDiv = document.createElement("div");
         frameDiv.classList.add("frame");
+
         const frameImageDiv = document.createElement("div");
         const frameImageLabel = document.createElement("label");
         frameImageLabel.innerText = "Frame image:";
@@ -407,9 +452,60 @@ window.addEventListener("load", () => {
         });
         frameImageDiv.appendChild(imageInput);
         frameDiv.appendChild(frameImageDiv);
+
+        const frameOptionsDiv = document.createElement("div");
+        frameOptionsDiv.classList.add("frame-options");
+        frameOptionsDiv.classList.add("multiframe-only");
+        const frameTimeDiv = document.createElement("div");
+        const frameTimeLabel = document.createElement("label");
+        frameTimeLabel.innerText = "Time:";
+        frameTimeDiv.appendChild(frameTimeLabel);
+        frameTimeDiv.appendChild(new Text(" "));
+        const frameTimeInput = document.createElement("input");
+        frameTimeInput.type = "number";
+        initCoordsInputs([ frameTimeInput ], (values) => {
+            const frameIndex = frames.indexOf(frame);
+            [ state.frames[frameIndex].time ] = values;
+
+            requestRedraw();
+        });
+        frameTimeDiv.appendChild(frameTimeInput);
+        const frameTimeLockedInput = document.createElement("input");
+        frameTimeLockedInput.type = "checkbox";
+        frameTimeLockedInput.addEventListener("change", (event) => {
+            const frameIndex = frames.indexOf(frame);
+            state.frames[frameIndex].timeLocked = frameTimeLockedInput.checked;
+
+            requestRedraw();
+        });
+        frameTimeDiv.appendChild(frameTimeLockedInput);
+        frameOptionsDiv.appendChild(frameTimeDiv);
+        const frameMainRadioDiv = document.createElement("div");
+        const frameMainRadioLabel = document.createElement("label");
+        frameMainRadioLabel.appendChild(new Text("Main:"));
+        const frameMainRadioInput = document.createElement("input");
+        frameMainRadioInput.type = "radio";
+        frameMainRadioInput.name = "mainFrameRadio";
+        frameMainRadioInput.addEventListener("change", () => {
+            if (frameMainRadioInput.checked) {
+                const frameIndex = frames.indexOf(frame);
+                if (state.mainFrameIndex !== frameIndex) {
+                    setMainFrame(frameIndex);
+                    
+                    requestRedraw();
+                }
+            }
+            
+        });
+        frameMainRadioLabel.appendChild(frameMainRadioInput);
+        frameMainRadioDiv.appendChild(frameMainRadioLabel);
+        frameOptionsDiv.appendChild(frameMainRadioDiv);
+        frameDiv.appendChild(frameOptionsDiv);
+
         const canvas = document.createElement("canvas");
         canvas.classList.add("frame-canvas");
         frameDiv.appendChild(canvas);
+
         const frameFooterDiv = document.createElement("div");
         frameFooterDiv.classList.add("frame-footer");
         const moveLeftButton = document.createElement("button")
@@ -422,6 +518,8 @@ window.addEventListener("load", () => {
         removeButton.innerText = "X";
         removeButton.addEventListener("click", () => {
             removeFrame(frames.indexOf(frame));
+
+            requestRedraw();
         });
         frameFooterDiv.appendChild(removeButton);
         const moveRightButton = document.createElement("button")
@@ -431,6 +529,7 @@ window.addEventListener("load", () => {
         });
         frameFooterDiv.appendChild(moveRightButton);
         frameDiv.appendChild(frameFooterDiv);
+
         divFrames.insertBefore(frameDiv, divFrames.children[divFrames.children.length - 1]);
 
         canvas.tabIndex = -1;
@@ -442,6 +541,9 @@ window.addEventListener("load", () => {
         
         const frame = {
             imageNameLabel,
+            timeInput: frameTimeInput,
+            timeLockedInput: frameTimeLockedInput,
+            mainInput: frameMainRadioInput,
             moveLeftButton,
             moveRightButton,
             canvas,
@@ -454,14 +556,19 @@ window.addEventListener("load", () => {
 
         state.frames.push({
             name: "",
+            time: 0,
+            timeLocked: true,
             points: [],
             lines: [],
         });
+        const frameIndex = frames.length - 1;
         linesData.push([]);
+        if (state.mainFrameIndex === null) {
+            setMainFrame(frameIndex);
+        }
 
         divFrames.scrollTo(divFrames.scrollWidth, 0);
 
-        const frameIndex = frames.length - 1;
         updateFrameButtons(frameIndex);
         if (frameIndex !== 0) updateFrameButtons(frameIndex - 1);
         
@@ -770,6 +877,7 @@ window.addEventListener("load", () => {
         updateFrameButtons(otherFrameIndex);
 
         swap(state.frames, frameIndex, otherFrameIndex);
+        state.mainFrameIndex = swapIndex(state.mainFrameIndex, frameIndex, otherFrameIndex);
         if (state.selectedPoint !== null) {
             state.selectedPoint[0] = swapIndex(state.selectedPoint[0], frameIndex, otherFrameIndex);
         }
@@ -800,7 +908,13 @@ window.addEventListener("load", () => {
         for (let lineIndex = state.frames[frameIndex].lines.length - 1; lineIndex >= 0; lineIndex--) {
             removeLine(frameIndex, lineIndex);
         }
+        if (state.mainFrameIndex === frameIndex) {
+            setMainFrame(state.mainFrameIndex + 1 < state.frames.length ? state.mainFrameIndex + 1 : state.mainFrameIndex > 0 ? state.mainFrameIndex - 1 : null);
+        }
         state.frames.splice(frameIndex, 1);
+        if (state.mainFrameIndex !== null && state.mainFrameIndex > frameIndex) {
+            state.mainFrameIndex -= 1;
+        }
         linesData.splice(frameIndex, 1);
     }
 
@@ -1670,18 +1784,34 @@ window.addEventListener("load", () => {
      */
     const imagesInput = document.getElementById("input-images");
     imagesInput.addEventListener("change", () => {
-        Promise.allSettled(Array.from(imagesInput.files).map((file) => {
+        Promise.allSettled(Array.from(imagesInput.files).map(async (file) => {
             const url = URL.createObjectURL(file);
 
-            return loadImage(url).finally(() => URL.revokeObjectURL(url));
+            const image = await loadImage(url).finally(() => URL.revokeObjectURL(url));
+
+            return [ image, file.name ];
         })).then((results) => {
             let failedCount = 0;
 
             for (const result of results) {
                 if (result.status === "fulfilled") {
-                    addFrame();
+                    const [ image, name ] = result.value;
 
-                    setFrameImage(frames.length - 1, result.value);
+                    let chosenFrameIndex = null;
+
+                    for (let frameIndex = 0; frameIndex < state.frames.length; frameIndex++) {
+                        if (frames[frameIndex].image === null && state.frames[frameIndex].name === name) {
+                            chosenFrameIndex = frameIndex;
+                            break;
+                        }
+                    }
+
+                    if (chosenFrameIndex === null) {
+                        addFrame();
+                        chosenFrameIndex = frames.length - 1;
+                    }
+                    
+                    setFrameImage(chosenFrameIndex, image, name);
                 } else {
                     failedCount += 1;
                 }
@@ -1864,6 +1994,8 @@ window.addEventListener("load", () => {
     const addFrameButton = document.getElementById("button-add-frame");
     addFrameButton.addEventListener("click", () => {
         addFrame();
+
+        requestRedraw();
     });
 
     /**
@@ -1998,6 +2130,120 @@ window.addEventListener("load", () => {
     const cameraPosCopyInput = document.getElementById("input-camera-pos-copy");
     cameraPosCopyInput.addEventListener("click", (event) => {
         navigator.clipboard.writeText(`${state.cameraX} ${state.cameraY} ${state.cameraZ}`);
+    });
+
+    /**
+     * @type {HTMLInputElement}
+     */
+    const cameraSpeedXInput = document.getElementById("input-camera-speed-x");
+    /**
+     * @type {HTMLInputElement}
+     */
+    const cameraSpeedXLockedInput = document.getElementById("input-camera-speed-x-locked");
+    /**
+     * @type {HTMLInputElement}
+     */
+    const cameraSpeedYInput = document.getElementById("input-camera-speed-y");
+    /**
+     * @type {HTMLInputElement}
+     */
+    const cameraSpeedYLockedInput = document.getElementById("input-camera-speed-y-locked");
+    /**
+     * @type {HTMLInputElement}
+     */
+    const cameraSpeedZInput = document.getElementById("input-camera-speed-z");
+    /**
+     * @type {HTMLInputElement}
+     */
+    const cameraSpeedZLockedInput = document.getElementById("input-camera-speed-z-locked");
+
+    initCoordsInputs([ cameraSpeedXInput, cameraSpeedYInput, cameraSpeedZInput ], (values) => {
+        [ state.cameraSpeedX, state.cameraSpeedY, state.cameraSpeedZ ] = values;
+
+        requestRedraw();
+    });
+
+    cameraSpeedXLockedInput.addEventListener("change", (event) => {
+        state.cameraSpeedXLocked = cameraSpeedXLockedInput.checked;
+
+        requestRedraw();
+    });
+    cameraSpeedYLockedInput.addEventListener("change", (event) => {
+        state.cameraSpeedYLocked = cameraSpeedYLockedInput.checked;
+
+        requestRedraw();
+    });
+    cameraSpeedZLockedInput.addEventListener("change", (event) => {
+        state.cameraSpeedZLocked = cameraSpeedZLockedInput.checked;
+
+        requestRedraw();
+    });
+
+    /**
+     * @type {HTMLInputElement}
+     */
+    const cameraSpeedCopyInput = document.getElementById("input-camera-speed-copy");
+    cameraSpeedCopyInput.addEventListener("click", (event) => {
+        navigator.clipboard.writeText(`${state.cameraSpeedX} ${state.cameraSpeedY} ${state.cameraSpeedZ}`);
+    });
+
+    /**
+     * @type {HTMLInputElement}
+     */
+    const cameraSpeedWInput = document.getElementById("input-camera-speed-w");
+    /**
+     * @type {HTMLInputElement}
+     */
+    const cameraSpeedWLockedInput = document.getElementById("input-camera-speed-w-locked");
+    /**
+     * @type {HTMLInputElement}
+     */
+    const cameraSpeedFInput = document.getElementById("input-camera-speed-f");
+    /**
+     * @type {HTMLInputElement}
+     */
+    const cameraSpeedFLockedInput = document.getElementById("input-camera-speed-f-locked");
+    /**
+     * @type {HTMLInputElement}
+     */
+    const cameraSpeedRInput = document.getElementById("input-camera-speed-r");
+    /**
+     * @type {HTMLInputElement}
+     */
+    const cameraSpeedRLockedInput = document.getElementById("input-camera-speed-r-locked");
+
+    initCoordsInputs([ cameraSpeedWInput ], (values) => {
+        [ state.cameraSpeedW ] = values;
+
+        requestRedraw();
+    });
+
+    initCoordsInputs([ cameraSpeedFInput ], (values) => {
+        [ state.cameraSpeedF ] = values;
+
+        requestRedraw();
+    });
+
+    initCoordsInputs([ cameraSpeedRInput ], (values) => {
+        [ state.cameraSpeedR ] = values;
+
+        requestRedraw();
+    });
+
+    cameraSpeedWLockedInput.addEventListener("change", (event) => {
+        state.cameraSpeedWLocked = cameraSpeedWLockedInput.checked;
+
+        requestRedraw();
+    });
+    cameraSpeedFLockedInput.addEventListener("change", (event) => {
+        state.cameraSpeedFLocked = cameraSpeedFLockedInput.checked;
+
+        requestRedraw();
+    });
+    cameraSpeedRLockedInput.addEventListener("change", (event) => {
+        state.cameraSpeedRLocked = cameraSpeedRLockedInput.checked;
+
+        requestRedraw();
     });
 
     /**
@@ -2192,55 +2438,39 @@ window.addEventListener("load", () => {
     reverseInput.addEventListener("click", (event) => {
         if (imageWidth === null) return;
 
-        const worldPoints = state.frames[0].points.map((point) => {
-            return [ point.wx, point.wy, point.wz ];
-        });
-        const projectedPoints = state.frames[0].points.map((point) => {
-            return [ point.px, point.py ];
-        });
-
-        const constants = [
-            state.offsetBy01,
-            imageWidth,
-            imageHeight,
-        ];
-        const startingVariables = [
-            state.cameraX,
-            state.cameraY,
-            state.cameraZ,
-            state.cameraYaw * (Math.PI / 180),
-            state.cameraPitch * (Math.PI / 180),
-            state.cameraFov * (Math.PI / 180),
-            state.padTop + state.padBottom,
-            (state.padRight - state.padLeft) / 2,
-            (state.padBottom - state.padTop) / 2,
-        ];
-        const maxSteps = [
-            state.cameraXLocked ? 0 : 1,
-            state.cameraYLocked ? 0 : 1,
-            state.cameraZLocked ? 0 : 1,
-            state.cameraYawLocked ? 0 : (Math.PI / 180),
-            state.cameraPitchLocked ? 0 : (Math.PI / 180),
-            state.cameraFovLocked ? 0 : (Math.PI / 180),
-            state.padTopLocked || state.padBottomLocked ? 0 : 1,
-            state.padLeftLocked && state.padRightLocked ? 0 : 1,
-            state.padTopLocked || state.padBottomLocked ? 0 : 1,
-        ];
-        const [ x, y, z, yaw, pitch, fov, padV, offsetX, offsetY ] = reverseProjection(constants, startingVariables, maxSteps, worldPoints, projectedPoints, state.iterations);
-        if (!state.cameraXLocked) state.cameraX = x;
-        if (!state.cameraYLocked) state.cameraY = y;
-        if (!state.cameraZLocked) state.cameraZ = z;
-        if (!state.cameraYawLocked) state.cameraYaw = yaw / (Math.PI / 180);
-        if (!state.cameraPitchLocked) state.cameraPitch = pitch / (Math.PI / 180);
-        if (!state.cameraFovLocked) state.cameraFov = fov / (Math.PI / 180);
+        const constants = projectConstants();
+        const variablesInitial = projectVariables();
+        const variablesLocked = projectVariablesLocked();
+        const frames = projectFrames();
+        const [ cameraX, cameraY, cameraZ, cameraSpeedX, cameraSpeedY, cameraSpeedZ, cameraSpeedW, cameraSpeedF, cameraSpeedR, cameraYaw, cameraPitch, cameraFov, padV, centerX, centerY, ...times ] = reverseProjection(constants, variablesInitial, variablesLocked, frames, state.iterations);
+        const offsetX = (centerX - imageWidth / 2);
+        const offsetY = (centerY - imageHeight / 2);
+        if (!state.cameraXLocked) state.cameraX = cameraX;
+        if (!state.cameraYLocked) state.cameraY = cameraY;
+        if (!state.cameraZLocked) state.cameraZ = cameraZ;
+        if (!state.cameraSpeedXLocked) state.cameraSpeedX = cameraSpeedX;
+        if (!state.cameraSpeedYLocked) state.cameraSpeedY = cameraSpeedY;
+        if (!state.cameraSpeedZLocked) state.cameraSpeedZ = cameraSpeedZ;
+        if (!state.cameraSpeedWLocked) state.cameraSpeedW = cameraSpeedW;
+        if (!state.cameraSpeedFLocked) state.cameraSpeedF = cameraSpeedF;
+        if (!state.cameraSpeedRLocked) state.cameraSpeedR = cameraSpeedR;
+        if (!state.cameraYawLocked) state.cameraYaw = cameraYaw / (Math.PI / 180);
+        if (!state.cameraPitchLocked) state.cameraPitch = cameraPitch / (Math.PI / 180);
+        if (!state.cameraFovLocked) state.cameraFov = cameraFov / (Math.PI / 180);
         const padH = state.padLeftLocked ? 2 * (state.padLeft + offsetX) : state.padRightLocked ? 2 * (state.padRight - offsetX) : Math.abs(offsetX * 2);
         if (!state.padLeftLocked) state.padLeft = padH / 2 - offsetX;
         if (!state.padRightLocked) state.padRight = padH / 2 + offsetX;
         if (!state.padTopLocked) state.padTop = padV / 2 - offsetY;
         if (!state.padBottomLocked) state.padBottom = padV / 2 + offsetY;
+        const mainFrameTime = state.frames[state.mainFrameIndex].time;
+        for (let frameIndex = 0; frameIndex < state.frames.length; frameIndex++) {
+            if (!state.frames[frameIndex].timeLocked) state.frames[frameIndex].time = times[frameIndex] + mainFrameTime;
+        }
 
         requestRedraw();
     });
+
+    const errorLabel = document.getElementById("label-error");
 
     /**
      * @type {HTMLInputElement}
@@ -2301,6 +2531,12 @@ window.addEventListener("load", () => {
         }
         while (frames.length > newState.frames.length) {
             removeFrame(frames.length - 1);
+        }
+
+        for (let frameIndex = 0; frameIndex < state.frames.length; frameIndex++) {
+            if (frames[frameIndex].image !== null) {
+                newState.frames[frameIndex].name = state.frames[frameIndex].name;
+            }
         }
 
         for (const key in state) {
@@ -2504,6 +2740,11 @@ window.addEventListener("load", () => {
             }
         }
 
+        const multiframe = state.frames.length > 1;
+        for (const element of document.querySelectorAll(".multiframe-only")) {
+            element.classList.toggle("multiframe-hidden", !multiframe);
+        }
+
         fillSelectOptions(pointSelect, "points", state.selectedPoint);
 
         const pointSelected = state.selectedPoint !== null;
@@ -2527,6 +2768,9 @@ window.addEventListener("load", () => {
 
         for (let frameIndex = 0; frameIndex < frames.length; frameIndex++) {
             frames[frameIndex].imageNameLabel.innerText = state.frames[frameIndex].name;
+            frames[frameIndex].timeInput.value = state.frames[frameIndex].time;
+            frames[frameIndex].timeLockedInput.checked = state.frames[frameIndex].timeLocked;
+            frames[frameIndex].mainInput.checked = frameIndex === state.mainFrameIndex;
         }
 
         brightnessInput.value = brightnessFunctionInv(state.brightness);
@@ -2540,6 +2784,12 @@ window.addEventListener("load", () => {
         cameraPosXInput.value = state.cameraX;
         cameraPosYInput.value = state.cameraY;
         cameraPosZInput.value = state.cameraZ;
+        cameraSpeedXInput.value = state.cameraSpeedX;
+        cameraSpeedYInput.value = state.cameraSpeedY;
+        cameraSpeedZInput.value = state.cameraSpeedZ;
+        cameraSpeedWInput.value = state.cameraSpeedW;
+        cameraSpeedFInput.value = state.cameraSpeedF;
+        cameraSpeedRInput.value = state.cameraSpeedR;
         cameraRotYawInput.value = state.cameraYaw;
         cameraRotPitchInput.value = state.cameraPitch;
         cameraFovInput.value = state.cameraFov;
@@ -2547,6 +2797,12 @@ window.addEventListener("load", () => {
         cameraPosXLockedInput.checked = state.cameraXLocked;
         cameraPosYLockedInput.checked = state.cameraYLocked;
         cameraPosZLockedInput.checked = state.cameraZLocked;
+        cameraSpeedXLockedInput.checked = state.cameraSpeedXLocked;
+        cameraSpeedYLockedInput.checked = state.cameraSpeedYLocked;
+        cameraSpeedZLockedInput.checked = state.cameraSpeedZLocked;
+        cameraSpeedWLockedInput.checked = state.cameraSpeedWLocked;
+        cameraSpeedFLockedInput.checked = state.cameraSpeedFLocked;
+        cameraSpeedRLockedInput.checked = state.cameraSpeedRLocked;
         cameraRotYawLockedInput.checked = state.cameraYawLocked;
         cameraRotPitchLockedInput.checked = state.cameraPitchLocked;
         cameraFovLockedInput.checked = state.cameraFovLocked;
@@ -2563,6 +2819,16 @@ window.addEventListener("load", () => {
 
         iterationsInput.value = state.iterations;
 
+        if (imageWidth !== null) {
+            const constants = projectConstants();
+            const variables = projectVariables();
+            const frames = projectFrames();
+            const error = projectedError(constants, variables, frames);
+            errorLabel.innerText = `${error} = ${Math.sqrt(error)}^2`;
+        } else {
+            errorLabel.innerText = "";
+        }
+
         moveWorldXInput.value = state.moveWorldX;
         moveWorldYInput.value = state.moveWorldY;
         moveWorldZInput.value = state.moveWorldZ;
@@ -2575,6 +2841,59 @@ window.addEventListener("load", () => {
         // axis2RangeInput.value = axis2[1];
 
         // maxErrorInput.value = maxError;
+    }
+
+    function projectConstants() {
+        return [
+            state.offsetBy01,
+            imageHeight,
+        ];
+    }
+
+    function projectVariables() {
+        return [
+            state.cameraX,
+            state.cameraY,
+            state.cameraZ,
+            state.cameraSpeedX,
+            state.cameraSpeedY,
+            state.cameraSpeedZ,
+            state.cameraSpeedW,
+            state.cameraSpeedF,
+            state.cameraSpeedR,
+            state.cameraYaw * (Math.PI / 180),
+            state.cameraPitch * (Math.PI / 180),
+            state.cameraFov * (Math.PI / 180),
+            state.padTop + state.padBottom,
+            imageWidth / 2 + (state.padRight - state.padLeft) / 2,
+            imageHeight / 2 + (state.padBottom - state.padTop) / 2,
+            ...state.frames.map((frame) => frame.time - state.frames[state.mainFrameIndex].time),
+        ];
+    }
+
+    function projectVariablesLocked() {
+        return [
+            state.cameraXLocked,
+            state.cameraYLocked,
+            state.cameraZLocked,
+            state.cameraSpeedXLocked,
+            state.cameraSpeedYLocked,
+            state.cameraSpeedZLocked,
+            state.cameraSpeedWLocked,
+            state.cameraSpeedFLocked,
+            state.cameraSpeedRLocked,
+            state.cameraYawLocked,
+            state.cameraPitchLocked,
+            state.cameraFovLocked,
+            state.padTopLocked || state.padBottomLocked,
+            state.padRightLocked || state.padLeftLocked,
+            state.padTopLocked || state.padBottomLocked,
+            ...state.frames.map((frame) => frame.timeLocked),
+        ];
+    }
+
+    function projectFrames() {
+        return state.frames.map((frame) => frame.points.map((point) => [[ point.wx, point.wy, point.wz ], [ point.px, point.py ]]));
     }
 
     function redraw() {
@@ -2609,7 +2928,24 @@ window.addEventListener("load", () => {
             context.translate(-roundPx(centerX), -roundPx(centerY));
 
             context.imageSmoothingEnabled = state.showBlur;
+
+            context.lineWidth = 1 / zoom;
+            context.strokeStyle = "#ccc";
+
+            context.strokeRect(-state.padLeft - 0.5 / zoom, -state.padTop - 0.5 / zoom, state.padLeft + imageWidth + state.padRight + 1 / zoom, state.padTop + imageHeight + state.padBottom + 1 / zoom);
+
             context.drawImage(frame.offscreenCanvas, 0, 0, imageWidth, imageHeight);
+            
+            {
+                const centerX = imageWidth / 2 + (state.padRight - state.padLeft) / 2;
+                const centerY = imageHeight / 2 + (state.padBottom - state.padTop) / 2;
+                context.beginPath();
+                context.moveTo(centerX - 8, centerY);
+                context.lineTo(centerX + 8, centerY);
+                context.moveTo(centerX, centerY - 8);
+                context.lineTo(centerX, centerY + 8);
+                context.stroke();
+            }
 
             if (state.showGrid && zoom >= 8) {
                 const minX = Math.max(Math.floor(floorPx(centerX - canvas.width / 2 / zoom)), 0);
@@ -2713,7 +3049,10 @@ window.addEventListener("load", () => {
                 drawPoint(centerPath, outlinePath, smallOutlinePath, outlineEdgePath, point.px, point.py, selected, small);
 
                 if (state.showProjected) {
-                    const [ ppx, ppy ] = project([ state.offsetBy01, imageWidth, imageHeight ], [ state.cameraX, state.cameraY, state.cameraZ, state.cameraYaw * (Math.PI / 180), state.cameraPitch * (Math.PI / 180), state.cameraFov * (Math.PI / 180), state.padTop + state.padBottom, (state.padRight - state.padLeft) / 2, (state.padBottom - state.padTop) / 2 ], [ point.wx, point.wy, point.wz ]);
+                    const constants = projectConstants();
+                    const variables = projectVariables();
+
+                    const [ ppx, ppy ] = project(constants, variables, frameIndex, [ point.wx, point.wy, point.wz ]);
                     drawPoint(projectedCenterPath, projectedOutlinePath, projectedSmallOutlinePath, outlineEdgePath, ppx, ppy, selected, small);
                 }
             }

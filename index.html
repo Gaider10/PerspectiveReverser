@@ -8,25 +8,31 @@
     </head>
     <body>
         <!-- <div> -->
-            <label>Add frame images:</label>
-            <input id="input-images" type="file" multiple>
-            <br>
-            <label>Point:</label>
-            <select id="select-point"><option>None</option></select>
-            <br>
-            <label>World Pos:</label>
-            <input id="input-world-pos-x" type="number">
-            <input id="input-world-pos-y" type="number">
-            <input id="input-world-pos-z" type="number">
-            <input id="input-world-pos-copy" type="button" value="Copy">
-            <br>
-            <label>Projected Pos:</label>
-            <input id="input-projected-pos-x" type="number">
-            <input id="input-projected-pos-y" type="number">
-            <input id="input-projected-pos-copy" type="button" value="Copy">
-            <br>
-            <label>Line:</label>
-            <select id="select-line"><option>None</option></select>
+            <div>
+                <label>Add frame images:</label>
+                <input id="input-images" type="file" multiple>
+            </div>
+            <div>
+                <label>Point:</label>
+                <select id="select-point"><option>None</option></select>
+            </div>
+            <div>
+                <label>World Pos:</label>
+                <input id="input-world-pos-x" type="number">
+                <input id="input-world-pos-y" type="number">
+                <input id="input-world-pos-z" type="number">
+                <input id="input-world-pos-copy" type="button" value="Copy">
+            </div>
+            <div>
+                <label>Projected Pos:</label>
+                <input id="input-projected-pos-x" type="number">
+                <input id="input-projected-pos-y" type="number">
+                <input id="input-projected-pos-copy" type="button" value="Copy">
+            </div>
+            <div>
+                <label>Line:</label>
+                <select id="select-line"><option>None</option></select>
+            </div>
             <!-- <br>
             <label>Line Axis:</label>
             <input id="input-line-axis-x" type="number">
@@ -43,64 +49,100 @@
                 <input id="input-brightness" type="range">
                 <label id="label-brightness-value"></label>
             </div>
-            <br>
-            <label for="input-show-grid">Show Grid:</label>
-            <input id="input-show-grid" type="checkbox">
-            <br>
-            <label for="input-show-blur">Show Blur:</label>
-            <input id="input-show-blur" type="checkbox">
-            <br>
-            <label for="input-show-projected">Show Projected:</label>
-            <input id="input-show-projected" type="checkbox">
-            <br>
-            <label for="input-offset-by-01">Offset By 0.1:</label>
-            <input id="input-offset-by-01" type="checkbox">
-            <br>
-            <label>Camera Pos:</label>
-            <input id="input-camera-pos-x" type="number">
-            <input id="input-camera-pos-x-locked" type="checkbox">
-            <input id="input-camera-pos-y" type="number">
-            <input id="input-camera-pos-y-locked" type="checkbox">
-            <input id="input-camera-pos-z" type="number">
-            <input id="input-camera-pos-z-locked" type="checkbox">
-            <input id="input-camera-pos-copy" type="button" value="Copy">
-            <br>
-            <label>Camera Rot:</label>
-            <input id="input-camera-rot-yaw" type="number">
-            <input id="input-camera-rot-yaw-locked" type="checkbox">
-            <input id="input-camera-rot-pitch" type="number">
-            <input id="input-camera-rot-pitch-locked" type="checkbox">
-            <input id="input-camera-rot-copy" type="button" value="Copy">
-            <br>
-            <label>Camera Fov:</label>
-            <input id="input-camera-fov" type="number">
-            <input id="input-camera-fov-locked" type="checkbox">
-            <br>
-            <label>Padding (LRTB):</label>
-            <input id="input-pad-left" type="number">
-            <input id="input-pad-left-locked" type="checkbox">
-            <input id="input-pad-right" type="number">
-            <input id="input-pad-right-locked" type="checkbox">
-            <input id="input-pad-top" type="number">
-            <input id="input-pad-top-locked" type="checkbox">
-            <input id="input-pad-bottom" type="number">
-            <input id="input-pad-bottom-locked" type="checkbox">
-            <br>
-            <input id="input-camera-tp-copy" type="button" value="Copy as /tp command">
-            <input id="input-camera-tp-copy-offset" type="button" value="Copy as /tp command with toggled 0.1 offset">
-            <br>
-            <label>Iterations:</label>
-            <input id="input-iterations" type="number">
-            <input id="input-reverse" type="button" value="Reverse">
-            <br>
-            <input id="input-move-world-x" type="number">
-            <input id="input-move-world-y" type="number">
-            <input id="input-move-world-z" type="number">
-            <input id="input-move-world" type="button" value="Move World">
-            <br>
-            <textarea id="textarea-state"></textarea>
-            <br>
-            <textarea id="textarea-tomdata"></textarea>
+            <div>
+                <label for="input-show-grid">Show Grid:</label>
+                <input id="input-show-grid" type="checkbox">
+            </div>
+            <div>
+                <label for="input-show-blur">Show Blur:</label>
+                <input id="input-show-blur" type="checkbox">
+            </div>
+            <div>
+                <label for="input-show-projected">Show Projected:</label>
+                <input id="input-show-projected" type="checkbox">
+            </div>
+            <div>
+                <label for="input-offset-by-01">Offset By 0.1:</label>
+                <input id="input-offset-by-01" type="checkbox">
+            </div>
+            <div>
+                <label>Camera Pos:</label>
+                <input id="input-camera-pos-x" type="number">
+                <input id="input-camera-pos-x-locked" type="checkbox">
+                <input id="input-camera-pos-y" type="number">
+                <input id="input-camera-pos-y-locked" type="checkbox">
+                <input id="input-camera-pos-z" type="number">
+                <input id="input-camera-pos-z-locked" type="checkbox">
+                <input id="input-camera-pos-copy" type="button" value="Copy">
+            </div>
+            <div class="multiframe-only">
+                <label>Camera Speed (XYZ):</label>
+                <input id="input-camera-speed-x" type="number">
+                <input id="input-camera-speed-x-locked" type="checkbox">
+                <input id="input-camera-speed-y" type="number">
+                <input id="input-camera-speed-y-locked" type="checkbox">
+                <input id="input-camera-speed-z" type="number">
+                <input id="input-camera-speed-z-locked" type="checkbox">
+                <input id="input-camera-speed-copy" type="button" value="Copy">
+            </div>
+            <div class="multiframe-only">
+                <label>Camera Speed (WFR):</label>
+                <input id="input-camera-speed-w" type="number">
+                <input id="input-camera-speed-w-locked" type="checkbox">
+                <input id="input-camera-speed-f" type="number">
+                <input id="input-camera-speed-f-locked" type="checkbox">
+                <input id="input-camera-speed-r" type="number">
+                <input id="input-camera-speed-r-locked" type="checkbox">
+            </div>
+            <div>
+                <label>Camera Rot:</label>
+                <input id="input-camera-rot-yaw" type="number">
+                <input id="input-camera-rot-yaw-locked" type="checkbox">
+                <input id="input-camera-rot-pitch" type="number">
+                <input id="input-camera-rot-pitch-locked" type="checkbox">
+                <input id="input-camera-rot-copy" type="button" value="Copy">
+            </div>
+            <div>
+                <label>Camera Fov:</label>
+                <input id="input-camera-fov" type="number">
+                <input id="input-camera-fov-locked" type="checkbox">
+            </div>
+            <div>
+                <label>Padding (LRTB):</label>
+                <input id="input-pad-left" type="number">
+                <input id="input-pad-left-locked" type="checkbox">
+                <input id="input-pad-right" type="number">
+                <input id="input-pad-right-locked" type="checkbox">
+                <input id="input-pad-top" type="number">
+                <input id="input-pad-top-locked" type="checkbox">
+                <input id="input-pad-bottom" type="number">
+                <input id="input-pad-bottom-locked" type="checkbox">
+            </div>
+            <div>
+                <input id="input-camera-tp-copy" type="button" value="Copy as /tp command">
+                <input id="input-camera-tp-copy-offset" type="button" value="Copy as /tp command with toggled 0.1 offset">
+            </div>
+            <div>
+                <label>Iterations:</label>
+                <input id="input-iterations" type="number">
+                <input id="input-reverse" type="button" value="Reverse">
+            </div>
+            <div>
+                <label>Error:</label>
+                <label id="label-error"></label>
+            </div>
+            <div>
+                <input id="input-move-world-x" type="number">
+                <input id="input-move-world-y" type="number">
+                <input id="input-move-world-z" type="number">
+                <input id="input-move-world" type="button" value="Move World">
+            </div>
+            <div>
+                <textarea id="textarea-state"></textarea>
+            </div>
+            <div>
+                <textarea id="textarea-tomdata"></textarea>
+            </div>
         <!-- </div> -->
         <!-- <div>
             <label>Axis 1:</label>

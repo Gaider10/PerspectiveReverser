@@ -29,6 +29,14 @@ input[type=number], select {
     flex-direction: column;
 }
 
+.frame-options {
+    display: flex;
+}
+
+.frame-options > div:nth-child(1) {
+    flex-grow: 1;
+}
+
 .frame-footer {
     display: flex;
     justify-content: center;
@@ -48,6 +56,7 @@ input[type=number], select {
 }
 
 .add-frame-div {
+    margin-bottom: 21px;
     display: flex;
     align-items: center;
     height: 400px;
@@ -96,4 +105,8 @@ input[type=number], select {
     width: 600px;
     height: 200px;
     box-sizing: border-box;
+}
+
+.multiframe-hidden {
+    display: none;
 }
