@@ -484,8 +484,8 @@ window.addEventListener("load", () => {
     const canvasClientWidth = 600;
     const canvasClientHeight = 400;
 
-    let imageWidth = null;
-    let imageHeight = null;
+    let frameWidth = null;
+    let frameHeight = null;
 
     /**
      * 
@@ -539,16 +539,16 @@ window.addEventListener("load", () => {
         state.cameraX += (state.cameraSpeedX - state.cameraSpeedW * sinYaw - state.cameraSpeedF * sinYaw * cosPitch - state.cameraSpeedR * cosYaw) * deltaTime;
         state.cameraY += (state.cameraSpeedY + state.cameraSpeedF * sinPitch) * deltaTime;
         state.cameraZ += (state.cameraSpeedZ + state.cameraSpeedW * cosYaw + state.cameraSpeedF * cosYaw * cosPitch - state.cameraSpeedR * sinYaw) * deltaTime;
-        const centerX = imageWidth / 2 + (state.padRight - state.padLeft) / 2 + state.zoomCenterSpeedX * deltaTime;
-        const centerY = imageHeight / 2 + (state.padBottom - state.padTop) / 2 + state.zoomCenterSpeedY * deltaTime;
-        const width = (state.padLeft + imageWidth + state.padRight);
-        const height = (state.padTop + imageHeight + state.padBottom);
+        const centerX = frameWidth / 2 + (state.padRight - state.padLeft) / 2 + state.zoomCenterSpeedX * deltaTime;
+        const centerY = frameHeight / 2 + (state.padBottom - state.padTop) / 2 + state.zoomCenterSpeedY * deltaTime;
+        const width = (state.padLeft + frameWidth + state.padRight);
+        const height = (state.padTop + frameHeight + state.padBottom);
         const zoomedWidth = width - state.zoomSpeed * deltaTime * width / height;
         const zoomedHeight = height - state.zoomSpeed * deltaTime;
         state.padLeft = 0 - (centerX - zoomedWidth / 2);
-        state.padRight = (centerX + zoomedWidth / 2) - imageWidth;
+        state.padRight = (centerX + zoomedWidth / 2) - frameWidth;
         state.padTop = 0 - (centerY - zoomedHeight / 2);
-        state.padBottom = (centerY + zoomedHeight / 2) - imageHeight;
+        state.padBottom = (centerY + zoomedHeight / 2) - frameHeight;
     }
 
     /**
@@ -880,7 +880,7 @@ window.addEventListener("load", () => {
                         selectPoint(null);
 
                         if (state.selectedLine === null) {
-                            selectLine(frameIndex, createLine());
+                            selectLine(frameIndex, createLine(frameIndex));
                         }
                         
                         toggleLinePoint(frameIndex, state.selectedLine, clickedPointIndex);
@@ -900,8 +900,8 @@ window.addEventListener("load", () => {
                         const abc = calculateBestLineABCNorm(frameIndex, lineIndex);
                         if (abc === null) continue;
 
-                        const lineDist = Math.abs(abc.a * mouseFrameX + abc.b * mouseFrameY + abc.c) / canvasToFrameTransform.m11;
-                        if (lineDist < 5 / screenToCanvasZoom && lineDist < minLineDist) {
+                        const lineDist = Math.abs(abc.a * mouseFrameX + abc.b * mouseFrameY + abc.c);
+                        if (lineDist < 5 * Math.abs(canvasToFrameTransform.m11) && lineDist < minLineDist) {
                             minLineDist = lineDist;
                             clickedLineIndex = lineIndex;
                         }
@@ -918,8 +918,8 @@ window.addEventListener("load", () => {
             
                             selectPoint(null);
 
-                            if (state.selectedLine === null) {
-                                selectLine(frameIndex, createLine());
+                            if (state.selectedLine === null || state.selectedLine[0] !== frameIndex) {
+                                selectLine(frameIndex, createLine(frameIndex));
                             }
 
                             toggleLinePixel(state.selectedLine[0], state.selectedLine[1], pixelPx, pixelPy);
@@ -1148,23 +1148,23 @@ window.addEventListener("load", () => {
         
         state.frames[frameIndex].name = name;
 
-        const prevImageWidth = imageWidth;
-        const prevImageHeight = imageHeight;
+        const prevImageWidth = frameWidth;
+        const prevImageHeight = frameHeight;
 
-        imageWidth = null;
-        imageHeight = null;
+        frameWidth = null;
+        frameHeight = null;
         for (let i = 0; i < frames.length; i++) {
             if (frames[i].image !== null) {
-                imageWidth = frames[i].image.width;
-                imageHeight = frames[i].image.height;
+                frameWidth = frames[i].image.width;
+                frameHeight = frames[i].image.height;
                 break;
             }
         }
 
-        if (imageWidth !== null && (prevImageWidth !== imageWidth || prevImageHeight !== imageHeight)) {
-            screenCanvasCenterX = imageWidth / 2;
-            screenCanvasCenterY = imageHeight / 2;
-            zoomIndex = Math.min(Math.max(-Math.ceil(Math.log2(Math.max(imageWidth / canvasClientWidth, imageHeight / canvasClientHeight)) * 2) / 2, CONFIG.zoomIndexMin), CONFIG.zoomIndexMax);
+        if (frameWidth !== null && (prevImageWidth !== frameWidth || prevImageHeight !== frameHeight)) {
+            screenCanvasCenterX = frameWidth / 2;
+            screenCanvasCenterY = frameHeight / 2;
+            zoomIndex = Math.min(Math.max(-Math.ceil(Math.log2(Math.max(frameWidth / canvasClientWidth, frameHeight / canvasClientHeight)) * 2) / 2, CONFIG.zoomIndexMin), CONFIG.zoomIndexMax);
             screenToCanvasZoom = Math.pow(2, zoomIndex);
         }
 
@@ -1180,12 +1180,12 @@ window.addEventListener("load", () => {
 
         if (frame.image === null) return;
 
-        frame.offscreenCanvas.width = imageWidth;
-        frame.offscreenCanvas.height = imageHeight;
+        frame.offscreenCanvas.width = frameWidth;
+        frame.offscreenCanvas.height = frameHeight;
         frame.offscreenContext.drawImage(frame.image, 0, 0);
-        const imageData = frame.offscreenContext.getImageData(0, 0, imageWidth, imageHeight);
+        const imageData = frame.offscreenContext.getImageData(0, 0, frameWidth, frameHeight);
         if (state.brightness !== 1) {
-            for (let i = 0; i < imageWidth * imageHeight; i++) {
+            for (let i = 0; i < frameWidth * frameHeight; i++) {
                 for (let j = 0; j < 3; j++) {
                     imageData.data[i * 4 + j] = Math.min(imageData.data[i * 4 + j] * state.brightness, 255);
                 }
@@ -1740,6 +1740,8 @@ window.addEventListener("load", () => {
      * @returns {boolean}
      */
     function selectLine(frameIndex, lineIndex) {
+        // console.log(`selectLine(${frameIndex}, ${lineIndex})`);
+
         const isNull = frameIndex === null || lineIndex === null;
         if (state.selectedLine === null ? isNull : state.selectedLine[0] === frameIndex && state.selectedLine[1] === lineIndex) return true;
 
@@ -1757,7 +1759,9 @@ window.addEventListener("load", () => {
             }
         }
 
-        state.selectedLine = [frameIndex, lineIndex];
+        state.selectedLine = isNull ? null : [frameIndex, lineIndex];
+
+        // console.log(`state.selectedLine = ${JSON.stringify(state.selectedLine)}`);
 
         return true;
     }
@@ -1964,7 +1968,7 @@ window.addEventListener("load", () => {
     //         { x: point.px - 3, y: point.py + 3 },
     //     ];
 
-    //     for (const line of state.lines) {
+    //     for (const s) {
     //         const cuts = getLineCuts(line, pointIndex);
     //         if (cuts === null) continue;
 
@@ -2698,7 +2702,7 @@ window.addEventListener("load", () => {
      */
     const reverseInput = document.getElementById("input-reverse");
     reverseInput.addEventListener("click", (event) => {
-        if (imageWidth === null) return;
+        if (frameWidth === null) return;
 
         const constants = projectConstants();
         const variablesInitial = projectVariables();
@@ -2710,8 +2714,8 @@ window.addEventListener("load", () => {
             "random": randomDescent,
         })[state.reversalMethod];
         const [ cameraX, cameraY, cameraZ, cameraSpeedX, cameraSpeedY, cameraSpeedZ, cameraSpeedW, cameraSpeedF, cameraSpeedR, cameraYaw, cameraPitch, cameraFov, padV, centerX, centerY, zoomCenterSpeedX, zoomCenterSpeedY, zoomSpeed, ...times ] = reverseProjection(constants, variablesInitial, variablesLocked, frames, descentFunc, state.iterations);
-        const offsetX = (centerX - imageWidth / 2);
-        const offsetY = (centerY - imageHeight / 2);
+        const offsetX = (centerX - frameWidth / 2);
+        const offsetY = (centerY - frameHeight / 2);
         if (!state.cameraXLocked) state.cameraX = cameraX;
         if (!state.cameraYLocked) state.cameraY = cameraY;
         if (!state.cameraZLocked) state.cameraZ = cameraZ;
@@ -3102,7 +3106,7 @@ window.addEventListener("load", () => {
         reversalMethodSelect.value = state.reversalMethod;
         iterationsInput.value = state.iterations;
 
-        if (imageWidth !== null) {
+        if (frameWidth !== null) {
             const constants = projectConstants();
             const variables = projectVariables();
             const frames = projectFrames();
@@ -3129,7 +3133,7 @@ window.addEventListener("load", () => {
     function projectConstants() {
         return [
             state.offsetBy01,
-            imageHeight,
+            frameHeight,
         ];
     }
 
@@ -3148,8 +3152,8 @@ window.addEventListener("load", () => {
             state.cameraPitch * (Math.PI / 180),
             state.cameraFov * (Math.PI / 180),
             state.padTop + state.padBottom,
-            imageWidth / 2 + (state.padRight - state.padLeft) / 2,
-            imageHeight / 2 + (state.padBottom - state.padTop) / 2,
+            frameWidth / 2 + (state.padRight - state.padLeft) / 2,
+            frameHeight / 2 + (state.padBottom - state.padTop) / 2,
             state.zoomCenterSpeedX,
             state.zoomCenterSpeedY,
             state.zoomSpeed,
@@ -3198,18 +3202,18 @@ window.addEventListener("load", () => {
         transform.translateSelf(-roundPx(screenCanvasCenterX), -roundPx(screenCanvasCenterY));
         
         const deltaTime = state.frames[frameIndex].time - state.frames[state.mainFrameIndex].time;
-        const screenMainFrameCenterX = state.padLeft + imageWidth / 2;
-        const screenMainFrameCenterY = state.padTop + imageHeight / 2;
+        const screenMainFrameCenterX = state.padLeft + frameWidth / 2;
+        const screenMainFrameCenterY = state.padTop + frameHeight / 2;
         const screenFrameCenterX = screenMainFrameCenterX + state.zoomCenterSpeedX * deltaTime;
         const screenFrameCenterY = screenMainFrameCenterY + state.zoomCenterSpeedY * deltaTime;
-        const screenFrameWidth = imageWidth - state.zoomSpeed * deltaTime * imageWidth / imageHeight;
-        const screenFrameHeight = imageHeight - state.zoomSpeed * deltaTime;
+        const screenFrameWidth = frameWidth - state.zoomSpeed * deltaTime * frameWidth / frameHeight;
+        const screenFrameHeight = frameHeight - state.zoomSpeed * deltaTime;
         
         const screenToCanvasTransform = DOMMatrix.fromMatrix(transform);
         
         transform.translateSelf(screenFrameCenterX, screenFrameCenterY);
-        transform.scaleSelf(screenFrameWidth / imageWidth, screenFrameHeight / imageHeight);
-        transform.translateSelf(-imageWidth / 2, -imageHeight / 2);
+        transform.scaleSelf(screenFrameWidth / frameWidth, screenFrameHeight / frameHeight);
+        transform.translateSelf(-frameWidth / 2, -frameHeight / 2);
 
         return [ screenToCanvasTransform, transform ];
     }
@@ -3271,37 +3275,18 @@ window.addEventListener("load", () => {
 
             const [ screenToCanvasTransform, frameToCanvasTransform ] = getFrameToCanvasTransform(frameIndex);
 
-            // context.translate(canvas.width / 2, canvas.height / 2);
-            // context.scale(zoom, zoom);
-            // context.translate(-roundPx(centerX), -roundPx(centerY));
-            
-            // const deltaTime = state.frames[frameIndex].time - state.frames[state.mainFrameIndex].time;
-            // const screenWidth = (state.padLeft + imageWidth + state.padRight);
-            // const screenHeight = (state.padTop + imageHeight + state.padBottom);
-            // const screenMainFrameCenterX = state.padLeft + imageWidth / 2;
-            // const screenMainFrameCenterY = state.padTop + imageHeight / 2;
-            // const screenFrameCenterX = screenMainFrameCenterX + state.zoomCenterSpeedX * deltaTime;
-            // const screenFrameCenterY = screenMainFrameCenterY + state.zoomCenterSpeedY * deltaTime;
-            // const screenFrameWidth = imageWidth - state.zoomSpeed * deltaTime * screenWidth / screenHeight;
-            // const screenFrameHeight = imageHeight - state.zoomSpeed * deltaTime;
-            
-            // const screenTransform = context.getTransform();
-            
-            // context.translate(screenFrameCenterX, screenFrameCenterY);
-            // context.scale(screenFrameWidth / imageWidth, screenFrameHeight / imageHeight);
-            // context.translate(-imageWidth / 2, -imageHeight / 2);
-            // const frameTransform = context.getTransform();
+            const frameToCanvasZoom = frameToCanvasTransform.m11;
 
             context.setTransform(frameToCanvasTransform);
-            context.drawImage(frame.offscreenCanvas, 0, 0, imageWidth, imageHeight);
+            context.drawImage(frame.offscreenCanvas, 0, 0, frameWidth, frameHeight);
             
             context.setTransform(screenToCanvasTransform);
             
             context.lineWidth = 1 / screenToCanvasZoom;
             context.strokeStyle = "#ccc";
             
-            const screenWidth = (state.padLeft + imageWidth + state.padRight);
-            const screenHeight = (state.padTop + imageHeight + state.padBottom);
+            const screenWidth = (state.padLeft + frameWidth + state.padRight);
+            const screenHeight = (state.padTop + frameHeight + state.padBottom);
             context.strokeRect(-0.5 / screenToCanvasZoom, -0.5 / screenToCanvasZoom, screenWidth + 1 / screenToCanvasZoom, screenHeight + 1 / screenToCanvasZoom);
 
             context.beginPath();
@@ -3315,9 +3300,9 @@ window.addEventListener("load", () => {
 
             if (state.showGrid && screenToCanvasZoom >= 8) {
                 const minX = Math.max(Math.floor(floorPx(screenCanvasCenterX - canvas.width / 2 / screenToCanvasZoom)), 0);
-                const maxX = Math.min(Math.ceil(ceilPx(screenCanvasCenterX + canvas.width / 2 / screenToCanvasZoom)), imageWidth);
+                const maxX = Math.min(Math.ceil(ceilPx(screenCanvasCenterX + canvas.width / 2 / screenToCanvasZoom)), frameWidth);
                 const minY = Math.max(Math.floor(floorPx(screenCanvasCenterY - canvas.height / 2 / screenToCanvasZoom)), 0);
-                const maxY = Math.min(Math.ceil(ceilPx(screenCanvasCenterY + canvas.height / 2 / screenToCanvasZoom)), imageHeight);
+                const maxY = Math.min(Math.ceil(ceilPx(screenCanvasCenterY + canvas.height / 2 / screenToCanvasZoom)), frameHeight);
 
                 context.beginPath();
 
@@ -3385,7 +3370,7 @@ window.addEventListener("load", () => {
             const outlineEdgePath = new Path2D();
 
             for (let pointIndex = 0; pointIndex < state.frames[frameIndex].points.length; pointIndex++) {
-                let worldPosSelected = false;
+                let selected = false;
                 if (state.selectedPoint !== null) {
                     const { wx, wy, wz } = state.frames[state.selectedPoint[0]].points[state.selectedPoint[1]];
                     if (
@@ -3393,22 +3378,22 @@ window.addEventListener("load", () => {
                         state.frames[frameIndex].points[pointIndex].wy === wy && 
                         state.frames[frameIndex].points[pointIndex].wz === wz
                     ) {
-                        worldPosSelected = true;
+                        selected = true;
                     }
                 }
                 if (state.selectedLine !== null) {
-                    for (const linePointIndex of state.frames[state.selectedLine[0]].lines[state.selectedLine[1]]) {
+                    for (const linePointIndex of state.frames[state.selectedLine[0]].lines[state.selectedLine[1]].points) {
                         const { wx, wy, wz } = state.frames[state.selectedLine[0]].points[linePointIndex];
                         if (
                             state.frames[frameIndex].points[pointIndex].wx === wx && 
                             state.frames[frameIndex].points[pointIndex].wy === wy && 
                             state.frames[frameIndex].points[pointIndex].wz === wz
                         ) {
-                            worldPosSelected = true;
+                            selected = true;
+                            break;
                         }
                     }
                 }
-                const selected = worldPosSelected;
                 const small = selected && !(state.selectedPoint !== null && state.selectedPoint[0] === frameIndex && state.selectedPoint[1] === pointIndex);
                 
                 const point = state.frames[frameIndex].points[pointIndex];
@@ -3464,7 +3449,7 @@ window.addEventListener("load", () => {
 
             for (let lineIndex = 0; lineIndex < state.frames[frameIndex].lines.length; lineIndex++) {
                 const line = state.frames[frameIndex].lines[lineIndex];
-                const lineData = linesData[lineIndex];
+                const lineData = linesData[frameIndex][lineIndex];
 
                 const lineSelected = state.selectedLine !== null && state.selectedLine[0] === frameIndex && state.selectedLine[1] === lineIndex;
 
@@ -3475,23 +3460,23 @@ window.addEventListener("load", () => {
                     let x1, y1, x2, y2;
 
                     // line is mostly horizontal
-                    if (a * a < image.width / image.height) {
+                    if (a * a < frameWidth / frameHeight) {
                         x1 = 0;
                         y1 = -(a * x1 + c) / b;
                         if (y1 < 0) {
                             y1 = 0;
                             x1 = -(b * y1 + c) / a;
-                        } else if (y1 > image.height) {
-                            y1 = image.height;
+                        } else if (y1 > frameHeight) {
+                            y1 = frameHeight;
                             x1 = -(b * y1 + c) / a;
                         }
-                        x2 = image.width;
+                        x2 = frameWidth;
                         y2 = -(a * x2 + c) / b;
                         if (y2 < 0) {
                             y2 = 0;
                             x2 = -(b * y2 + c) / a;
-                        } else if (y2 > image.height) {
-                            y2 = image.height;
+                        } else if (y2 > frameHeight) {
+                            y2 = frameHeight;
                             x2 = -(b * y2 + c) / a;
                         }
                     } else {
@@ -3500,17 +3485,17 @@ window.addEventListener("load", () => {
                         if (x1 < 0) {
                             x1 = 0;
                             y1 = -(a * x1 + c) / b;
-                        } else if (x1 > image.width) {
-                            x1 = image.width;
+                        } else if (x1 > frameWidth) {
+                            x1 = frameWidth;
                             y1 = -(a * x1 + c) / b;
                         }
-                        y2 = image.height;
+                        y2 = frameHeight;
                         x2 = -(b * y2 + c) / a;
                         if (x2 < 0) {
                             x2 = 0;
                             y2 = -(a * x2 + c) / b;
-                        } else if (x2 > image.width) {
-                            x2 = image.width;
+                        } else if (x2 > frameWidth) {
+                            x2 = frameWidth;
                             y2 = -(a * x2 + c) / b;
                         }
                     }
@@ -3552,23 +3537,23 @@ window.addEventListener("load", () => {
                 // context.fill();
             }
             
-            context.lineWidth = 1 / screenToCanvasZoom;
+            context.lineWidth = Math.abs(1 / frameToCanvasZoom);
             context.strokeStyle = "#00fb";
             context.stroke(lineSplitPath);
             
-            context.lineWidth = 1 / screenToCanvasZoom;
+            context.lineWidth = Math.abs(1 / frameToCanvasZoom);
             context.strokeStyle = "#f00b";
             context.stroke(pixelEmptyPath);
             
-            context.lineWidth = 1 / screenToCanvasZoom;
+            context.lineWidth = Math.abs(1 / frameToCanvasZoom);
             context.strokeStyle = "#0f0b";
             context.stroke(pixelFilledPath);
             
-            context.lineWidth = 1 / screenToCanvasZoom;
+            context.lineWidth = Math.abs(1 / frameToCanvasZoom);
             context.strokeStyle = "#f904";
             context.stroke(lineCenterPath);
             
-            context.lineWidth = 1 / screenToCanvasZoom;
+            context.lineWidth = Math.abs(1 / frameToCanvasZoom);
             context.strokeStyle = "#f90b";
             context.stroke(selectedLineCenterPath);
 
