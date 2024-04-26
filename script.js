@@ -11,7 +11,7 @@ const CONFIG = {
 
 function project(constants, variables, frameIndex, worldPoint) {
     const [ offsetBy0_1, imageSizeY ] = constants;
-    const [ cameraX, cameraY, cameraZ, cameraSpeedX, cameraSpeedY, cameraSpeedZ, cameraSpeedW, cameraSpeedF, cameraSpeedR, cameraYaw, cameraPitch, cameraFov, padV, centerX, centerY, centerSpeedX, centerSpeedY, zoomSpeed, ...times ] = variables;
+    const [ cameraX, cameraY, cameraZ, cameraSpeedX, cameraSpeedY, cameraSpeedZ, cameraSpeedW, cameraSpeedF, cameraSpeedR, cameraYaw, cameraPitch, cameraFov, padV, centerX, centerY, zoomCenterSpeedX, zoomCenterSpeedY, zoomSpeed, ...times ] = variables;
     const time = times[frameIndex];
 
     const fullImageSizeY = imageSizeY + padV - zoomSpeed * time;
@@ -46,15 +46,15 @@ function project(constants, variables, frameIndex, worldPoint) {
     const w4 = -z3 + (offsetBy0_1 ? -0.1 : 0);
     
     const w4Inv = w4 === 0 ? 0 : 1 / w4;
-    const x5 = x4 * w4Inv * fullImageSizeY * 0.5 + (centerX + centerSpeedX * time);
-    const y5 = y4 * w4Inv * fullImageSizeY * 0.5 + (centerY + centerSpeedY * time);
+    const x5 = x4 * w4Inv * fullImageSizeY * 0.5 + (centerX + zoomCenterSpeedX * time);
+    const y5 = y4 * w4Inv * fullImageSizeY * 0.5 + (centerY + zoomCenterSpeedY * time);
 
     return [ x5, y5 ];
 }
 
 function projectedError(constants, variables, frames) {
     const [ offsetBy0_1, imageSizeY ] = constants;
-    const [ cameraX, cameraY, cameraZ, cameraSpeedX, cameraSpeedY, cameraSpeedZ, cameraSpeedW, cameraSpeedF, cameraSpeedR, cameraYaw, cameraPitch, cameraFov, padV, centerX, centerY, centerSpeedX, centerSpeedY, zoomSpeed, ...times ] = variables;
+    const [ cameraX, cameraY, cameraZ, cameraSpeedX, cameraSpeedY, cameraSpeedZ, cameraSpeedW, cameraSpeedF, cameraSpeedR, cameraYaw, cameraPitch, cameraFov, padV, centerX, centerY, zoomCenterSpeedX, zoomCenterSpeedY, zoomSpeed, ...times ] = variables;
 
     const sinYaw = Math.sin(cameraYaw);
     const cosYaw = Math.cos(cameraYaw);
@@ -96,8 +96,8 @@ function projectedError(constants, variables, frames) {
             const w4 = -z3 + (offsetBy0_1 ? -0.1 : 0);
             
             const w4Inv = w4 === 0 ? 0 : 1 / w4;
-            const x5 = x4 * w4Inv * fullImageSizeY * 0.5 + (centerX + centerSpeedX * time);
-            const y5 = y4 * w4Inv * fullImageSizeY * 0.5 + (centerY + centerSpeedY * time);
+            const x5 = x4 * w4Inv * fullImageSizeY * 0.5 + (centerX + zoomCenterSpeedX * time);
+            const y5 = y4 * w4Inv * fullImageSizeY * 0.5 + (centerY + zoomCenterSpeedY * time);
             
             const [ px, py ] = frame[pointIndex][1];
     
@@ -382,10 +382,10 @@ window.addEventListener("load", () => {
      *     padTop: number,
      *     padBottom: number,
      *     padTopBottomLocked: boolean,
-     *     centerSpeedX: number,
-     *     centerSpeedXLocked: boolean,
-     *     centerSpeedY: number,
-     *     centerSpeedYLocked: boolean,
+     *     zoomCenterSpeedX: number,
+     *     zoomCenterSpeedXLocked: boolean,
+     *     zoomCenterSpeedY: number,
+     *     zoomCenterSpeedYLocked: boolean,
      *     zoomSpeed: number,
      *     zoomSpeedLocked: boolean,
      *     reversalMethod: "gradient" | "perparam" | "random",
@@ -441,10 +441,10 @@ window.addEventListener("load", () => {
         padTop: 0,
         padBottom: 0,
         padTopBottomLocked: true,
-        centerSpeedX: 0,
-        centerSpeedXLocked: true,
-        centerSpeedY: 0,
-        centerSpeedYLocked: true,
+        zoomCenterSpeedX: 0,
+        zoomCenterSpeedXLocked: true,
+        zoomCenterSpeedY: 0,
+        zoomCenterSpeedYLocked: true,
         zoomSpeed: 0,
         zoomSpeedLocked: true,
         reversalMethod: "perparam",
@@ -471,10 +471,10 @@ window.addEventListener("load", () => {
      */
     let linesData = [];
 
-    let centerX = 0;
-    let centerY = 0;
+    let screenCanvasCenterX = 0;
+    let screenCanvasCenterY = 0;
     let zoomIndex = 0;
-    let zoom = 1;
+    let screenToCanvasZoom = 1;
     
     /**
      * @type {HTMLDivElement}
@@ -539,8 +539,8 @@ window.addEventListener("load", () => {
         state.cameraX += (state.cameraSpeedX - state.cameraSpeedW * sinYaw - state.cameraSpeedF * sinYaw * cosPitch - state.cameraSpeedR * cosYaw) * deltaTime;
         state.cameraY += (state.cameraSpeedY + state.cameraSpeedF * sinPitch) * deltaTime;
         state.cameraZ += (state.cameraSpeedZ + state.cameraSpeedW * cosYaw + state.cameraSpeedF * cosYaw * cosPitch - state.cameraSpeedR * sinYaw) * deltaTime;
-        const centerX = imageWidth / 2 + (state.padRight - state.padLeft) / 2 + state.centerSpeedX * deltaTime;
-        const centerY = imageHeight / 2 + (state.padBottom - state.padTop) / 2 + state.centerSpeedY * deltaTime;
+        const centerX = imageWidth / 2 + (state.padRight - state.padLeft) / 2 + state.zoomCenterSpeedX * deltaTime;
+        const centerY = imageHeight / 2 + (state.padBottom - state.padTop) / 2 + state.zoomCenterSpeedY * deltaTime;
         const width = (state.padLeft + imageWidth + state.padRight);
         const height = (state.padTop + imageHeight + state.padBottom);
         const zoomedWidth = width - state.zoomSpeed * deltaTime * width / height;
@@ -719,12 +719,12 @@ window.addEventListener("load", () => {
         updateFrameButtons(frameIndex);
         if (frameIndex !== 0) updateFrameButtons(frameIndex - 1);
         
-        let prevMouseDownPos = null;
-        let prevMouseUpPos = null;
+        let prevMouseDownCanvasPos = null;
+        let prevMouseUpCanvasPos = null;
         let mouseDragging = false;
         let draggedPointIndex = null;
-        let draggedPointOffsetX = 0;
-        let draggedPointOffsetY = 0;
+        let draggedPointCanvasOffsetX = 0;
+        let draggedPointCanvasOffsetY = 0;
         let doubleClickStartTime = 0;
 
         canvas.addEventListener("mousedown", (event) => {
@@ -733,19 +733,26 @@ window.addEventListener("load", () => {
             event.preventDefault();
             
             canvas.focus();
+            
+            if (prevMouseDownCanvasPos !== null) return;
 
-            if (prevMouseDownPos !== null) return;
+            const mouseCanvasX = event.offsetX;
+            const mouseCanvasY = event.offsetY;
 
+            // console.log(`mousedown`);
+            // console.log(`mouseCanvasPos: ${mouseCanvasX} ${mouseCanvasY}`);
+            
             const frameIndex = frames.indexOf(frame);
 
-            if (!event.shiftKey && Date.now() - doubleClickStartTime <= CONFIG.doubleClickDelay && prevMouseUpPos !== null) {
-                const dx = event.offsetX - prevMouseUpPos.x;
-                const dy = event.offsetY - prevMouseUpPos.y;
-                const dsq = dx * dx + dy * dy;
-                if (dsq <= CONFIG.mouseDragMin * CONFIG.mouseDragMin) {
-                    const px = roundTo(roundTo((event.offsetX - canvas.clientWidth / 2) / zoom + centerX, zoom), 1000);
-                    const py = roundTo(roundTo((event.offsetY - canvas.clientHeight / 2) / zoom + centerY, zoom), 1000);
+            const canvasToFrameTransform = getFrameToCanvasTransform(frameIndex)[1].invertSelf();
+            const { x: mouseFrameX, y: mouseFrameY } = canvasToFrameTransform.transformPoint(new DOMPoint(mouseCanvasX, mouseCanvasY));
+            // console.log(`mouseFramePos: ${mouseFrameX} ${mouseFrameY}`);
 
+            if (!event.shiftKey && Date.now() - doubleClickStartTime <= CONFIG.doubleClickDelay && prevMouseUpCanvasPos !== null) {
+                const mouseCanvasDx = mouseCanvasX - prevMouseUpCanvasPos.x;
+                const mouseCanvasDy = mouseCanvasY - prevMouseUpCanvasPos.y;
+                const mouseCanvasDsq = mouseCanvasDx * mouseCanvasDx + mouseCanvasDy * mouseCanvasDy;
+                if (mouseCanvasDsq <= CONFIG.mouseDragMin * CONFIG.mouseDragMin) {
                     let wx = 0;
                     let wy = 0;
                     let wz = 0;
@@ -757,8 +764,17 @@ window.addEventListener("load", () => {
                         wz = point.wz;
                     }
 
+                    // console.log(`doubleclick`);
+
                     if (selectLine(null)) {
-                        selectPoint(frameIndex, createPoint(frameIndex, wx, wy, wz, px, py));
+                        const canvasToFrameTransform = getFrameToCanvasTransform(frameIndex)[1].invertSelf();
+                        const { x: mouseFrameX, y: mouseFrameY } = canvasToFrameTransform.transformPoint(new DOMPoint(mouseCanvasX, mouseCanvasY));
+                        // console.log(`mouseFramePos: ${mouseFrameX} ${mouseFrameY}`);
+                        const roundedMouseFrameX = roundTo(roundTo(mouseFrameX, 1 / canvasToFrameTransform.m11), 1000);
+                        const roundedMouseFrameY = roundTo(roundTo(mouseFrameY, 1 / canvasToFrameTransform.m22), 1000);
+                        // console.log(`roundedMouseFramePos: ${roundedMouseFrameX} ${roundedMouseFrameY}`);
+
+                        selectPoint(frameIndex, createPoint(frameIndex, wx, wy, wz, roundedMouseFrameX, roundedMouseFrameY));
 
                         requestRedraw();
                     }
@@ -775,26 +791,33 @@ window.addEventListener("load", () => {
                     (state.selectedLine !== null && state.selectedLine[0] === frameIndex && state.frames[state.selectedLine[0]].lines[state.selectedLine[1]].points.includes(pointIndex));
                 if (!canBeDragged) continue;
 
-                const px = (event.offsetX - canvas.clientWidth / 2) / zoom + centerX;
-                const py = (event.offsetY - canvas.clientHeight / 2) / zoom + centerY;
-
                 const point = state.frames[frameIndex].points[pointIndex];
 
-                const dx = (point.px - px) * zoom;
-                const dy = (point.py - py) * zoom;
-                const dsq = dx * dx + dy * dy;
+                const pointFrameX = point.px;
+                const pointFrameY = point.py;
 
-                if (dsq < CONFIG.pointOuterRadius * CONFIG.pointOuterRadius && dsq < minDsq) {
-                    minDsq = dsq;
+                // console.log(`pointFramePos: ${pointFrameX} ${pointFrameY}`);
+
+                const frameToCanvasTransform = getFrameToCanvasTransform(frameIndex)[1];
+                const { x: pointCanvasX, y: pointCanvasY } = frameToCanvasTransform.transformPoint(new DOMPoint(pointFrameX, pointFrameY));
+
+                // console.log(`pointCanvasPos: ${pointCanvasX} ${pointCanvasY}`);
+
+                const canvasDx = pointCanvasX - mouseCanvasX;
+                const canvasDy = pointCanvasY - mouseCanvasY;
+                const canvasDsq = canvasDx * canvasDx + canvasDy * canvasDy;
+
+                if (canvasDsq < CONFIG.pointOuterRadius * CONFIG.pointOuterRadius && canvasDsq < minDsq) {
+                    minDsq = canvasDsq;
                     draggedPointIndex = pointIndex;
-                    draggedPointOffsetX = dx;
-                    draggedPointOffsetY = dy;
+                    draggedPointCanvasOffsetX = canvasDx;
+                    draggedPointCanvasOffsetY = canvasDy;
                 }
             }
 
-            prevMouseDownPos = {
-                x: event.offsetX,
-                y: event.offsetY,
+            prevMouseDownCanvasPos = {
+                x: mouseCanvasX,
+                y: mouseCanvasY,
             };
             doubleClickStartTime = Date.now();
         });
@@ -806,19 +829,33 @@ window.addEventListener("load", () => {
         window.addEventListener("mouseup", (event) => {
             if (frame.image === null) return;
             
-            if (prevMouseDownPos === null) return;
+            if (prevMouseDownCanvasPos === null) return;
+            
+            const mouseCanvasX = event.offsetX;
+            const mouseCanvasY = event.offsetY;
+
+            // console.log(`mouseup`);
+            // console.log(`mouseCanvasPos: ${mouseCanvasX} ${mouseCanvasY}`);
 
             if (!mouseDragging) {
                 const frameIndex = frames.indexOf(frame);
-                
-                const px = (event.offsetX - canvas.clientWidth / 2) / zoom + centerX;
-                const py = (event.offsetY - canvas.clientHeight / 2) / zoom + centerY;
                 
                 let minPointDistSq = Number.MAX_VALUE;
                 let clickedPointIndex = null;
                 
                 for (let pointIndex = 0; pointIndex < state.frames[frameIndex].points.length; pointIndex++) {
                     const point = state.frames[frameIndex].points[pointIndex];
+
+                    const pointFrameX = point.px;
+                    const pointFrameY = point.py;
+
+                    // console.log(`pointFramePos: ${pointFrameX} ${pointFrameY}`);
+
+                    const frameToCanvasTransform = getFrameToCanvasTransform(frameIndex)[1];
+                    const { x: pointCanvasX, y: pointCanvasY } = frameToCanvasTransform.transformPoint(new DOMPoint(pointFrameX, pointFrameY));
+
+                    // console.log(`pointCanvasPos: ${pointCanvasX} ${pointCanvasY}`);
+
                     let radius;
                     if (state.selectedPoint !== null && state.selectedPoint[0] === frameIndex && state.selectedPoint[1] === pointIndex) {
                         radius = CONFIG.pointOuterRadius;
@@ -828,16 +865,16 @@ window.addEventListener("load", () => {
                         radius = CONFIG.pointInnerRadius + CONFIG.pointEdgeWidth;
                     }
 
-                    const dx = (point.px - px) * zoom;
-                    const dy = (point.py - py) * zoom;
-                    const dsq = dx * dx + dy * dy;
+                    const canvasDx = pointCanvasX - mouseCanvasX;
+                    const canvasDy = pointCanvasY - mouseCanvasY;
+                    const canvasDsq = canvasDx * canvasDx + canvasDy * canvasDy;
                     
-                    if (dsq <= radius * radius && dsq < minPointDistSq) {
-                        minPointDistSq = dsq;
+                    if (canvasDsq <= radius * radius && canvasDsq < minPointDistSq) {
+                        minPointDistSq = canvasDsq;
                         clickedPointIndex = pointIndex;
                     }
                 }
-
+                
                 if (clickedPointIndex !== null) {
                     if (event.shiftKey) {
                         selectPoint(null);
@@ -845,7 +882,7 @@ window.addEventListener("load", () => {
                         if (state.selectedLine === null) {
                             selectLine(frameIndex, createLine());
                         }
-
+                        
                         toggleLinePoint(frameIndex, state.selectedLine, clickedPointIndex);
                     } else {
                         if (selectLine(null)) {
@@ -853,6 +890,9 @@ window.addEventListener("load", () => {
                         }
                     }
                 } else {
+                    const canvasToFrameTransform = getFrameToCanvasTransform(frameIndex)[1].invertSelf();
+                    const { x: mouseFrameX, y: mouseFrameY } = canvasToFrameTransform.transformPoint(new DOMPoint(mouseCanvasX, mouseCanvasY));
+
                     let minLineDist = Number.MAX_VALUE;
                     let clickedLineIndex = null;
 
@@ -860,8 +900,8 @@ window.addEventListener("load", () => {
                         const abc = calculateBestLineABCNorm(frameIndex, lineIndex);
                         if (abc === null) continue;
 
-                        const lineDist = Math.abs(abc.a * px + abc.b * py + abc.c);
-                        if (lineDist < 5 / zoom && lineDist < minLineDist) {
+                        const lineDist = Math.abs(abc.a * mouseFrameX + abc.b * mouseFrameY + abc.c) / canvasToFrameTransform.m11;
+                        if (lineDist < 5 / screenToCanvasZoom && lineDist < minLineDist) {
                             minLineDist = lineDist;
                             clickedLineIndex = lineIndex;
                         }
@@ -873,8 +913,8 @@ window.addEventListener("load", () => {
                         }
                     } else {
                         if (event.shiftKey) {
-                            const pixelPx = Math.floor((event.offsetX - canvas.clientWidth / 2) / zoom + roundPx(centerX));
-                            const pixelPy = Math.floor((event.offsetY - canvas.clientHeight / 2) / zoom + roundPx(centerY));
+                            const pixelPx = Math.floor(mouseFrameX);
+                            const pixelPy = Math.floor(mouseFrameY);
             
                             selectPoint(null);
 
@@ -893,10 +933,10 @@ window.addEventListener("load", () => {
                 requestRedraw();
             }
 
-            prevMouseDownPos = null;
-            prevMouseUpPos = {
-                x: event.offsetX,
-                y: event.offsetY,
+            prevMouseDownCanvasPos = null;
+            prevMouseUpCanvasPos = {
+                x: mouseCanvasX,
+                y: mouseCanvasY,
             };
             mouseDragging = false;
             draggedPointIndex = null;
@@ -907,35 +947,44 @@ window.addEventListener("load", () => {
 
             event.preventDefault();
 
-            if (!mouseDragging && prevMouseDownPos !== null) {
-                const dx = event.offsetX - prevMouseDownPos.x;
-                const dy = event.offsetY - prevMouseDownPos.y;
-                const dsq = dx * dx + dy * dy;
+            const mouseCanvasX = event.offsetX;
+            const mouseCanvasY = event.offsetY;
 
-                if (dsq > CONFIG.mouseDragMin * CONFIG.mouseDragMin) {
+            if (!mouseDragging && prevMouseDownCanvasPos !== null) {
+                const mouseCanvasDx = mouseCanvasX - prevMouseDownCanvasPos.x;
+                const mouseCanvasDy = mouseCanvasY - prevMouseDownCanvasPos.y;
+                const mouseCanvasDsq = mouseCanvasDx * mouseCanvasDx + mouseCanvasDy * mouseCanvasDy;
+
+                if (mouseCanvasDsq > CONFIG.mouseDragMin * CONFIG.mouseDragMin) {
                     mouseDragging = true;
                     doubleClickStartTime = 0;
                 }
             }
 
             if (mouseDragging) {
-                const dx = event.offsetX - prevMouseDownPos.x;
-                const dy = event.offsetY - prevMouseDownPos.y;
+                const mouseCanvasDx = mouseCanvasX - prevMouseDownCanvasPos.x;
+                const mouseCanvasDy = mouseCanvasY - prevMouseDownCanvasPos.y;
 
                 if (draggedPointIndex !== null) {
-                    const px = roundTo(roundTo((event.offsetX + draggedPointOffsetX - canvas.clientWidth / 2) / zoom + centerX, zoom), 1000);
-                    const py = roundTo(roundTo((event.offsetY + draggedPointOffsetY - canvas.clientHeight / 2) / zoom + centerY, zoom), 1000);
-
                     const frameIndex = frames.indexOf(frame);
-                    movePointProjected(frameIndex, draggedPointIndex, px, py);
+
+                    const newPointCanvasX = mouseCanvasX + draggedPointCanvasOffsetX;
+                    const newPointCanvasY = mouseCanvasY + draggedPointCanvasOffsetY;
+                    
+                    const canvasToFrameTransform = getFrameToCanvasTransform(frameIndex)[1].invertSelf();
+                    const { x: newPointFrameX, y: newPointFrameY } = canvasToFrameTransform.transformPoint(new DOMPoint(newPointCanvasX, newPointCanvasY));
+                    const roundedNewPointFrameX = roundTo(roundTo(newPointFrameX, 1 / canvasToFrameTransform.m11), 1000);
+                    const roundedNewPointFrameY = roundTo(roundTo(newPointFrameY, 1 / canvasToFrameTransform.m22), 1000);
+
+                    movePointProjected(frameIndex, draggedPointIndex, roundedNewPointFrameX, roundedNewPointFrameY);
                 } else {
-                    centerX -= dx / zoom;
-                    centerY -= dy / zoom;
+                    screenCanvasCenterX -= mouseCanvasDx / screenToCanvasZoom;
+                    screenCanvasCenterY -= mouseCanvasDy / screenToCanvasZoom;
                 }
                 
-                prevMouseDownPos = {
-                    x: event.offsetX,
-                    y: event.offsetY,
+                prevMouseDownCanvasPos = {
+                    x: mouseCanvasX,
+                    y: mouseCanvasY,
                 };
 
                 requestRedraw();
@@ -949,20 +998,28 @@ window.addEventListener("load", () => {
             
             event.preventDefault();
 
-            const frameIndex = frames.indexOf(frame);
+            const mouseCanvasX = event.offsetX;
+            const mouseCanvasY = event.offsetY;
 
-            const prevZoom = zoom;
+            const prevZoom = screenToCanvasZoom;
             zoomIndex = Math.min(Math.max(zoomIndex + Math.sign(-event.deltaY) * CONFIG.zoomIndexStep, CONFIG.zoomIndexMin), CONFIG.zoomIndexMax);
-            zoom = Math.pow(2, zoomIndex);
-            centerX += (event.offsetX - canvas.clientWidth / 2) * (1 / prevZoom - 1 / zoom);
-            centerY += (event.offsetY - canvas.clientHeight / 2) * (1 / prevZoom - 1 / zoom);
+            screenToCanvasZoom = Math.pow(2, zoomIndex);
+            screenCanvasCenterX += (mouseCanvasX - canvas.clientWidth / 2) * (1 / prevZoom - 1 / screenToCanvasZoom);
+            screenCanvasCenterY += (mouseCanvasY - canvas.clientHeight / 2) * (1 / prevZoom - 1 / screenToCanvasZoom);
             if (mouseDragging && draggedPointIndex !== null) {
-                const px = roundTo(roundTo((event.offsetX + draggedPointOffsetX - canvas.clientWidth / 2) / zoom + centerX, zoom), 1000);
-                const py = roundTo(roundTo((event.offsetY + draggedPointOffsetY - canvas.clientHeight / 2) / zoom + centerY, zoom), 1000);
+                const frameIndex = frames.indexOf(frame);
 
-                movePointProjected(frameIndex, draggedPointIndex, px, py);
+                const newPointCanvasX = mouseCanvasX + draggedPointCanvasOffsetX;
+                const newPointCanvasY = mouseCanvasY + draggedPointCanvasOffsetY;
+
+                const canvasToFrameTransform = getFrameToCanvasTransform(frameIndex)[1].invertSelf();
+                const { x: newPointFrameX, y: newPointFrameY } = canvasToFrameTransform.transformPoint(new DOMPoint(newPointCanvasX, newPointCanvasY));
+                const roundedNewPointFrameX = roundTo(roundTo(newPointFrameX, 1 / canvasToFrameTransform.m11), 1000);
+                const roundedNewPointFrameY = roundTo(roundTo(newPointFrameY, 1 / canvasToFrameTransform.m22), 1000);
+
+                movePointProjected(frameIndex, draggedPointIndex, roundedNewPointFrameX, roundedNewPointFrameY);
             }
-            
+
             requestRedraw();
         }, {
             passive: false,
@@ -990,11 +1047,13 @@ window.addEventListener("load", () => {
                             event.preventDefault();
         
                             const point = state.frames[state.selectedPoint[0]].points[state.selectedPoint[1]];
+
+                            const canvasToFrameTransform = getFrameToCanvasTransform(frameIndex)[1].invertSelf();
         
-                            const px = roundTo(roundTo(point.px + dsx / zoom, zoom), 1000);
-                            const py = roundTo(roundTo(point.py + dsy / zoom, zoom), 1000);
+                            const newPointFrameX = roundTo(roundTo(point.px + dsx * canvasToFrameTransform.m11, 1 / canvasToFrameTransform.m11), 1000);
+                            const newPointFrameY = roundTo(roundTo(point.py + dsy * canvasToFrameTransform.m22, 1 / canvasToFrameTransform.m22), 1000);
         
-                            movePointProjected(state.selectedPoint[0], state.selectedPoint[1], px, py);
+                            movePointProjected(state.selectedPoint[0], state.selectedPoint[1], newPointFrameX, newPointFrameY);
         
                             requestRedraw();
                         }
@@ -1103,10 +1162,10 @@ window.addEventListener("load", () => {
         }
 
         if (imageWidth !== null && (prevImageWidth !== imageWidth || prevImageHeight !== imageHeight)) {
-            centerX = imageWidth / 2;
-            centerY = imageHeight / 2;
+            screenCanvasCenterX = imageWidth / 2;
+            screenCanvasCenterY = imageHeight / 2;
             zoomIndex = Math.min(Math.max(-Math.ceil(Math.log2(Math.max(imageWidth / canvasClientWidth, imageHeight / canvasClientHeight)) * 2) / 2, CONFIG.zoomIndexMin), CONFIG.zoomIndexMax);
-            zoom = Math.pow(2, zoomIndex);
+            screenToCanvasZoom = Math.pow(2, zoomIndex);
         }
 
         if (image !== null) {
@@ -2534,33 +2593,33 @@ window.addEventListener("load", () => {
     /**
      * @type {HTMLInputElement}
      */
-    const centerSpeedXInput = document.getElementById("input-center-speed-x");
+    const zoomCenterSpeedXInput = document.getElementById("input-zoom-center-speed-x");
     /**
      * @type {HTMLInputElement}
      */
-    const centerSpeedXLockedInput = document.getElementById("input-center-speed-x-locked");
+    const zoomCenterSpeedXLockedInput = document.getElementById("input-zoom-center-speed-x-locked");
     /**
      * @type {HTMLInputElement}
      */
-    const centerSpeedYInput = document.getElementById("input-center-speed-y");
+    const zoomCenterSpeedYInput = document.getElementById("input-zoom-center-speed-y");
     /**
      * @type {HTMLInputElement}
      */
-    const centerSpeedYLockedInput = document.getElementById("input-center-speed-y-locked");
+    const zoomCenterSpeedYLockedInput = document.getElementById("input-zoom-center-speed-y-locked");
 
-    initCoordsInputs([ centerSpeedXInput, centerSpeedYInput ], (values) => {
-        [ state.centerSpeedX, state.centerSpeedY ] = values;
+    initCoordsInputs([ zoomCenterSpeedXInput, zoomCenterSpeedYInput ], (values) => {
+        [ state.zoomCenterSpeedX, state.zoomCenterSpeedY ] = values;
 
         requestRedraw();
     });
 
-    centerSpeedXLockedInput.addEventListener("change", (event) => {
-        state.centerSpeedXLocked = centerSpeedXLockedInput.checked;
+    zoomCenterSpeedXLockedInput.addEventListener("change", (event) => {
+        state.zoomCenterSpeedXLocked = zoomCenterSpeedXLockedInput.checked;
 
         requestRedraw();
     });
-    centerSpeedYLockedInput.addEventListener("change", (event) => {
-        state.centerSpeedYLocked = centerSpeedYLockedInput.checked;
+    zoomCenterSpeedYLockedInput.addEventListener("change", (event) => {
+        state.zoomCenterSpeedYLocked = zoomCenterSpeedYLockedInput.checked;
 
         requestRedraw();
     });
@@ -2650,7 +2709,7 @@ window.addEventListener("load", () => {
             "perparam": perParamDescent,
             "random": randomDescent,
         })[state.reversalMethod];
-        const [ cameraX, cameraY, cameraZ, cameraSpeedX, cameraSpeedY, cameraSpeedZ, cameraSpeedW, cameraSpeedF, cameraSpeedR, cameraYaw, cameraPitch, cameraFov, padV, centerX, centerY, centerSpeedX, centerSpeedY, zoomSpeed, ...times ] = reverseProjection(constants, variablesInitial, variablesLocked, frames, descentFunc, state.iterations);
+        const [ cameraX, cameraY, cameraZ, cameraSpeedX, cameraSpeedY, cameraSpeedZ, cameraSpeedW, cameraSpeedF, cameraSpeedR, cameraYaw, cameraPitch, cameraFov, padV, centerX, centerY, zoomCenterSpeedX, zoomCenterSpeedY, zoomSpeed, ...times ] = reverseProjection(constants, variablesInitial, variablesLocked, frames, descentFunc, state.iterations);
         const offsetX = (centerX - imageWidth / 2);
         const offsetY = (centerY - imageHeight / 2);
         if (!state.cameraXLocked) state.cameraX = cameraX;
@@ -2670,8 +2729,8 @@ window.addEventListener("load", () => {
         if (!state.padRightLocked) state.padRight = padH / 2 + offsetX;
         if (!state.padTopBottomLocked) state.padTop = padV / 2 - offsetY;
         if (!state.padTopBottomLocked) state.padBottom = padV / 2 + offsetY;
-        if (!state.centerSpeedXLocked) state.centerSpeedX = centerSpeedX;
-        if (!state.centerSpeedYLocked) state.centerSpeedY = centerSpeedY;
+        if (!state.zoomCenterSpeedXLocked) state.zoomCenterSpeedX = zoomCenterSpeedX;
+        if (!state.zoomCenterSpeedYLocked) state.zoomCenterSpeedY = zoomCenterSpeedY;
         if (!state.zoomSpeedLocked) state.zoomSpeed = zoomSpeed;
         const mainFrameTime = state.frames[state.mainFrameIndex].time;
         for (let frameIndex = 0; frameIndex < state.frames.length; frameIndex++) {
@@ -2753,6 +2812,11 @@ window.addEventListener("load", () => {
         for (const key in state) {
             if (typeof newState[key] === "undefined") {
                 newState[key] = JSON.parse(JSON.stringify(state[key]));
+            }
+        }
+        for (const key in newState) {
+            if (!(key in defaultState)) {
+                delete newState[key];
             }
         }
 
@@ -2904,15 +2968,15 @@ window.addEventListener("load", () => {
     }
 
     function roundPx(px) {
-        return Math.round(px * zoom) / zoom;
+        return Math.round(px * screenToCanvasZoom) / screenToCanvasZoom;
     }
 
     function floorPx(px) {
-        return Math.floor(px * zoom) / zoom;
+        return Math.floor(px * screenToCanvasZoom) / screenToCanvasZoom;
     }
 
     function ceilPx(px) {
-        return Math.ceil(px * zoom) / zoom;
+        return Math.ceil(px * screenToCanvasZoom) / screenToCanvasZoom;
     }
 
     function requestRedraw() {
@@ -3027,12 +3091,12 @@ window.addEventListener("load", () => {
         padRightLockedInput.checked = state.padRightLocked;
         padTopBottomLockedInput.checked = state.padTopBottomLocked;
 
-        centerSpeedXInput.value = state.centerSpeedX;
-        centerSpeedYInput.value = state.centerSpeedY;
+        zoomCenterSpeedXInput.value = state.zoomCenterSpeedX;
+        zoomCenterSpeedYInput.value = state.zoomCenterSpeedY;
         zoomSpeedInput.value = state.zoomSpeed;
         
-        centerSpeedXLockedInput.checked = state.centerSpeedXLocked;
-        centerSpeedYLockedInput.checked = state.centerSpeedYLocked;
+        zoomCenterSpeedXLockedInput.checked = state.zoomCenterSpeedXLocked;
+        zoomCenterSpeedYLockedInput.checked = state.zoomCenterSpeedYLocked;
         zoomSpeedLockedInput.checked = state.zoomSpeedLocked;
 
         reversalMethodSelect.value = state.reversalMethod;
@@ -3086,8 +3150,8 @@ window.addEventListener("load", () => {
             state.padTop + state.padBottom,
             imageWidth / 2 + (state.padRight - state.padLeft) / 2,
             imageHeight / 2 + (state.padBottom - state.padTop) / 2,
-            state.centerSpeedX,
-            state.centerSpeedY,
+            state.zoomCenterSpeedX,
+            state.zoomCenterSpeedY,
             state.zoomSpeed,
             ...state.frames.map((frame) => frame.time - state.frames[state.mainFrameIndex].time),
         ];
@@ -3110,8 +3174,8 @@ window.addEventListener("load", () => {
             state.padTopBottomLocked,
             state.padRightLocked && state.padLeftLocked,
             state.padTopBottomLocked,
-            state.centerSpeedXLocked,
-            state.centerSpeedYLocked,
+            state.zoomCenterSpeedXLocked,
+            state.zoomCenterSpeedYLocked,
             state.zoomSpeedLocked,
             ...state.frames.map((frame) => frame.timeLocked),
         ];
@@ -3121,8 +3185,65 @@ window.addEventListener("load", () => {
         return state.frames.map((frame) => frame.points.map((point) => [[ point.wx, point.wy, point.wz ], [ point.px, point.py ]]));
     }
 
+    /**
+     * 
+     * @param {number} frameIndex 
+     * @returns {[ screenToCanvasTransform: DOMMatrix, frameToCanvasTransform: DOMMatrix ]}
+     */
+    function getFrameToCanvasTransform(frameIndex) {
+        const transform = new DOMMatrix([ 1, 0, 0, 1, 0, 0 ]);
+
+        transform.translateSelf(frames[frameIndex].canvas.width / 2, frames[frameIndex].canvas.height / 2);
+        transform.scaleSelf(screenToCanvasZoom, screenToCanvasZoom);
+        transform.translateSelf(-roundPx(screenCanvasCenterX), -roundPx(screenCanvasCenterY));
+        
+        const deltaTime = state.frames[frameIndex].time - state.frames[state.mainFrameIndex].time;
+        const screenWidth = (state.padLeft + imageWidth + state.padRight);
+        const screenHeight = (state.padTop + imageHeight + state.padBottom);
+        const screenMainFrameCenterX = state.padLeft + imageWidth / 2;
+        const screenMainFrameCenterY = state.padTop + imageHeight / 2;
+        const screenFrameCenterX = screenMainFrameCenterX + state.zoomCenterSpeedX * deltaTime;
+        const screenFrameCenterY = screenMainFrameCenterY + state.zoomCenterSpeedY * deltaTime;
+        const screenFrameWidth = imageWidth - state.zoomSpeed * deltaTime * screenWidth / screenHeight;
+        const screenFrameHeight = imageHeight - state.zoomSpeed * deltaTime;
+        
+        const screenToCanvasTransform = DOMMatrix.fromMatrix(transform);
+        
+        transform.translateSelf(screenFrameCenterX, screenFrameCenterY);
+        transform.scaleSelf(screenFrameWidth / imageWidth, screenFrameHeight / imageHeight);
+        transform.translateSelf(-imageWidth / 2, -imageHeight / 2);
+
+        return [ screenToCanvasTransform, transform ];
+    }
+
+    /**
+     * 
+     * @param {number} frameIndex 
+     * @param {number} frameX 
+     * @param {number} frameY 
+     * @returns {[ canvasX: number, canvasY: number ]}
+     */
+    function frameToCanvasPoint(frameIndex, frameX, frameY) {
+        const [ _, frameTransform ] = getFrameToCanvasTransform(frameIndex);
+        const canvasP = frameTransform.transformPoint(new DOMPoint(frameX, frameY));
+        return [ canvasP.x, canvasP.y ];
+    }
+
+    /**
+     * 
+     * @param {number} frameIndex 
+     * @param {number} canvasX 
+     * @param {number} canvasY 
+     * @returns {[ frameX: number, frameY: number ]}
+     */
+    function canvasToFramePoint(frameIndex, canvasX, canvasY) {
+        const [ _, frameTransform ] = getFrameToCanvasTransform(frameIndex);
+        const frameP = frameTransform.invertSelf().transformPoint(new DOMPoint(canvasX, canvasY));
+        return [ frameP.x, frameP.y ];
+    }
+
     function redraw() {
-        const framesElementRect = divFrames.getBoundingClientRect();
+        // const framesElementRect = divFrames.getBoundingClientRect();
 
         for (let frameIndex = 0; frameIndex < frames.length; frameIndex++) {
             const frame = frames[frameIndex];
@@ -3142,48 +3263,63 @@ window.addEventListener("load", () => {
 
             canvas.width = canvas.clientWidth;
             canvas.height = canvas.clientHeight;
-
-            context.setTransform(1, 0, 0, 1, 0, 0);
+            
+            context.resetTransform();
             context.clearRect(0, 0, canvas.width, canvas.height);
-
+            
             if (frame.image === null) continue;
             
-            context.translate(canvas.width / 2, canvas.height / 2);
-            context.scale(zoom, zoom);
-            context.translate(-roundPx(centerX), -roundPx(centerY));
-
             context.imageSmoothingEnabled = state.showBlur;
 
-            context.lineWidth = 1 / zoom;
-            context.strokeStyle = "#ccc";
+            const [ screenTransform, frameTransform ] = getFrameToCanvasTransform(frameIndex);
 
+            // context.translate(canvas.width / 2, canvas.height / 2);
+            // context.scale(zoom, zoom);
+            // context.translate(-roundPx(centerX), -roundPx(centerY));
+            
+            // const deltaTime = state.frames[frameIndex].time - state.frames[state.mainFrameIndex].time;
+            // const screenWidth = (state.padLeft + imageWidth + state.padRight);
+            // const screenHeight = (state.padTop + imageHeight + state.padBottom);
+            // const screenMainFrameCenterX = state.padLeft + imageWidth / 2;
+            // const screenMainFrameCenterY = state.padTop + imageHeight / 2;
+            // const screenFrameCenterX = screenMainFrameCenterX + state.zoomCenterSpeedX * deltaTime;
+            // const screenFrameCenterY = screenMainFrameCenterY + state.zoomCenterSpeedY * deltaTime;
+            // const screenFrameWidth = imageWidth - state.zoomSpeed * deltaTime * screenWidth / screenHeight;
+            // const screenFrameHeight = imageHeight - state.zoomSpeed * deltaTime;
+            
+            // const screenTransform = context.getTransform();
+            
+            // context.translate(screenFrameCenterX, screenFrameCenterY);
+            // context.scale(screenFrameWidth / imageWidth, screenFrameHeight / imageHeight);
+            // context.translate(-imageWidth / 2, -imageHeight / 2);
+            // const frameTransform = context.getTransform();
+
+            context.setTransform(frameTransform);
             context.drawImage(frame.offscreenCanvas, 0, 0, imageWidth, imageHeight);
             
+            context.setTransform(screenTransform);
             
-            {
-                const deltaTime = state.frames[frameIndex].time - state.frames[state.mainFrameIndex].time;
-                const centerX = imageWidth / 2 + (state.padRight - state.padLeft) / 2 + state.centerSpeedX * deltaTime;
-                const centerY = imageHeight / 2 + (state.padBottom - state.padTop) / 2 + state.centerSpeedY * deltaTime;
-                const width = (state.padLeft + imageWidth + state.padRight);
-                const height = (state.padTop + imageHeight + state.padBottom);
-                const zoomedWidth = width - state.zoomSpeed * deltaTime * width / height;
-                const zoomedHeight = height - state.zoomSpeed * deltaTime;
+            context.lineWidth = 1 / screenToCanvasZoom;
+            context.strokeStyle = "#ccc";
+            
+            const screenWidth = (state.padLeft + imageWidth + state.padRight);
+            const screenHeight = (state.padTop + imageHeight + state.padBottom);
+            context.strokeRect(-0.5 / screenToCanvasZoom, -0.5 / screenToCanvasZoom, screenWidth + 1 / screenToCanvasZoom, screenHeight + 1 / screenToCanvasZoom);
 
-                context.strokeRect(centerX - zoomedWidth / 2 - 0.5 / zoom, centerY - zoomedHeight / 2 - 0.5 / zoom, zoomedWidth + 1 / zoom, zoomedHeight + 1 / zoom);
+            context.beginPath();
+            context.moveTo(screenWidth / 2 - 8, screenHeight / 2);
+            context.lineTo(screenWidth / 2 + 8, screenHeight / 2);
+            context.moveTo(screenWidth / 2, screenHeight / 2 - 8);
+            context.lineTo(screenWidth / 2, screenHeight / 2 + 8);
+            context.stroke();
 
-                context.beginPath();
-                context.moveTo(centerX - 8, centerY);
-                context.lineTo(centerX + 8, centerY);
-                context.moveTo(centerX, centerY - 8);
-                context.lineTo(centerX, centerY + 8);
-                context.stroke();
-            }
+            context.setTransform(frameTransform);
 
-            if (state.showGrid && zoom >= 8) {
-                const minX = Math.max(Math.floor(floorPx(centerX - canvas.width / 2 / zoom)), 0);
-                const maxX = Math.min(Math.ceil(ceilPx(centerX + canvas.width / 2 / zoom)), imageWidth);
-                const minY = Math.max(Math.floor(floorPx(centerY - canvas.height / 2 / zoom)), 0);
-                const maxY = Math.min(Math.ceil(ceilPx(centerY + canvas.height / 2 / zoom)), imageHeight);
+            if (state.showGrid && screenToCanvasZoom >= 8) {
+                const minX = Math.max(Math.floor(floorPx(screenCanvasCenterX - canvas.width / 2 / screenToCanvasZoom)), 0);
+                const maxX = Math.min(Math.ceil(ceilPx(screenCanvasCenterX + canvas.width / 2 / screenToCanvasZoom)), imageWidth);
+                const minY = Math.max(Math.floor(floorPx(screenCanvasCenterY - canvas.height / 2 / screenToCanvasZoom)), 0);
+                const maxY = Math.min(Math.ceil(ceilPx(screenCanvasCenterY + canvas.height / 2 / screenToCanvasZoom)), imageHeight);
 
                 context.beginPath();
 
@@ -3197,9 +3333,9 @@ window.addEventListener("load", () => {
                     context.lineTo(maxX, y);
                 }
 
-                context.lineWidth = 1 / zoom;
+                context.lineWidth = 1 / screenToCanvasZoom;
                 context.strokeStyle = "#aaa";
-                context.setLineDash([1 / zoom])
+                context.setLineDash([1 / screenToCanvasZoom])
                 context.stroke();
             }
             context.setLineDash([]);
@@ -3207,7 +3343,7 @@ window.addEventListener("load", () => {
             function drawPoint(centerPath, outlinePath, smallOutlinePath, outlineEdgePath, px, py, selected, small) {
                 centerPath.addPath((() => {
                     const path = new Path2D();
-                    path.arc(px, py, 1 / zoom, 0, 2 * Math.PI);
+                    path.arc(px, py, 1 / screenToCanvasZoom, 0, 2 * Math.PI);
                     return path;
                 })());
 
@@ -3216,25 +3352,25 @@ window.addEventListener("load", () => {
 
                     (small ? smallOutlinePath : outlinePath).addPath((() => {
                         const path = new Path2D();
-                        path.arc(px, py, (CONFIG.pointInnerRadius + outerRadius) * 0.5 / zoom, 0, 2 * Math.PI);
+                        path.arc(px, py, (CONFIG.pointInnerRadius + outerRadius) * 0.5 / screenToCanvasZoom, 0, 2 * Math.PI);
                         return path;
                     })());
                     
                     outlineEdgePath.addPath((() => {
                         const path = new Path2D();
-                        path.arc(px, py, (CONFIG.pointInnerRadius + CONFIG.pointEdgeWidth * 0.5) / zoom, 0, 2 * Math.PI);
+                        path.arc(px, py, (CONFIG.pointInnerRadius + CONFIG.pointEdgeWidth * 0.5) / screenToCanvasZoom, 0, 2 * Math.PI);
                         return path;
                     })());
                     
                     outlineEdgePath.addPath((() => {
                         const path = new Path2D();
-                        path.arc(px, py, (outerRadius - CONFIG.pointEdgeWidth * 0.5) / zoom, 0, 2 * Math.PI);
+                        path.arc(px, py, (outerRadius - CONFIG.pointEdgeWidth * 0.5) / screenToCanvasZoom, 0, 2 * Math.PI);
                         return path;
                     })());
                 } else {
                     outlineEdgePath.addPath((() => {
                         const path = new Path2D();
-                        path.arc(px, py, (CONFIG.pointInnerRadius + CONFIG.pointEdgeWidth * 0.5) / zoom, 0, 2 * Math.PI);
+                        path.arc(px, py, (CONFIG.pointInnerRadius + CONFIG.pointEdgeWidth * 0.5) / screenToCanvasZoom, 0, 2 * Math.PI);
                         return path;
                     })());
                 }
@@ -3414,27 +3550,27 @@ window.addEventListener("load", () => {
                 // context.fill();
             }
             
-            context.lineWidth = 1 / zoom;
+            context.lineWidth = 1 / screenToCanvasZoom;
             context.strokeStyle = "#00fb";
             context.stroke(lineSplitPath);
             
-            context.lineWidth = 1 / zoom;
+            context.lineWidth = 1 / screenToCanvasZoom;
             context.strokeStyle = "#f00b";
             context.stroke(pixelEmptyPath);
             
-            context.lineWidth = 1 / zoom;
+            context.lineWidth = 1 / screenToCanvasZoom;
             context.strokeStyle = "#0f0b";
             context.stroke(pixelFilledPath);
             
-            context.lineWidth = 1 / zoom;
+            context.lineWidth = 1 / screenToCanvasZoom;
             context.strokeStyle = "#f904";
             context.stroke(lineCenterPath);
             
-            context.lineWidth = 1 / zoom;
+            context.lineWidth = 1 / screenToCanvasZoom;
             context.strokeStyle = "#f90b";
             context.stroke(selectedLineCenterPath);
             
-            context.lineWidth = CONFIG.pointEdgeWidth / zoom;
+            context.lineWidth = CONFIG.pointEdgeWidth / screenToCanvasZoom;
             context.strokeStyle = "#222b";
             context.stroke(outlineEdgePath);
 
@@ -3442,11 +3578,11 @@ window.addEventListener("load", () => {
                 context.fillStyle = "#00f";
                 context.fill(projectedCenterPath);
 
-                context.lineWidth = (CONFIG.pointOuterRadius - CONFIG.pointInnerRadius - CONFIG.pointEdgeWidth * 2) / zoom;
+                context.lineWidth = (CONFIG.pointOuterRadius - CONFIG.pointInnerRadius - CONFIG.pointEdgeWidth * 2) / screenToCanvasZoom;
                 context.strokeStyle = "#0afb";
                 context.stroke(projectedOutlinePath);
 
-                context.lineWidth = (CONFIG.pointOuterRadius - CONFIG.pointInnerRadius - CONFIG.pointEdgeWidth * 2) * 0.5 / zoom;
+                context.lineWidth = (CONFIG.pointOuterRadius - CONFIG.pointInnerRadius - CONFIG.pointEdgeWidth * 2) * 0.5 / screenToCanvasZoom;
                 context.strokeStyle = "#0afb";
                 context.stroke(projectedSmallOutlinePath);
             }
@@ -3454,11 +3590,11 @@ window.addEventListener("load", () => {
             context.fillStyle = "#f00";
             context.fill(centerPath);
 
-            context.lineWidth = (CONFIG.pointOuterRadius - CONFIG.pointInnerRadius - CONFIG.pointEdgeWidth * 2) / zoom;
+            context.lineWidth = (CONFIG.pointOuterRadius - CONFIG.pointInnerRadius - CONFIG.pointEdgeWidth * 2) / screenToCanvasZoom;
             context.strokeStyle = "#0f0b";
             context.stroke(outlinePath);
 
-            context.lineWidth = (CONFIG.pointOuterRadius - CONFIG.pointInnerRadius - CONFIG.pointEdgeWidth * 2) * 0.5 / zoom;
+            context.lineWidth = (CONFIG.pointOuterRadius - CONFIG.pointInnerRadius - CONFIG.pointEdgeWidth * 2) * 0.5 / screenToCanvasZoom;
             context.strokeStyle = "#0f0b";
             context.stroke(smallOutlinePath);
         }
