@@ -56,8 +56,6 @@ function projectedError(constants, variables, frames) {
     const [ offsetBy0_1, imageSizeY ] = constants;
     const [ cameraX, cameraY, cameraZ, cameraSpeedX, cameraSpeedY, cameraSpeedZ, cameraSpeedW, cameraSpeedF, cameraSpeedR, cameraYaw, cameraPitch, cameraFov, padV, centerX, centerY, centerSpeedX, centerSpeedY, zoomSpeed, ...times ] = variables;
 
-    const fullImageSizeY = imageSizeY + padV - zoomSpeed * time;
-    
     const sinYaw = Math.sin(cameraYaw);
     const cosYaw = Math.cos(cameraYaw);
     const sinPitch = Math.sin(-cameraPitch);
@@ -71,6 +69,8 @@ function projectedError(constants, variables, frames) {
     for (let frameIndex = 0; frameIndex < frames.length; frameIndex++) {
         const frame = frames[frameIndex];
         const time = times[frameIndex];
+
+        const fullImageSizeY = imageSizeY + padV - zoomSpeed * time;
 
         for (let pointIndex = 0; pointIndex < frames[frameIndex].length; pointIndex++) {
             const [ x0, y0, z0 ] = frame[pointIndex][0];
@@ -96,8 +96,8 @@ function projectedError(constants, variables, frames) {
             const w4 = -z3 + (offsetBy0_1 ? -0.1 : 0);
             
             const w4Inv = w4 === 0 ? 0 : 1 / w4;
-            const x5 = x4 * w4Inv * Math.pow(zoomSpeed, time) + (centerX + centerSpeedX * time);
-            const y5 = y4 * w4Inv * Math.pow(zoomSpeed, time) + (centerY + centerSpeedY * time);
+            const x5 = x4 * w4Inv * fullImageSizeY * 0.5 + (centerX + centerSpeedX * time);
+            const y5 = y4 * w4Inv * fullImageSizeY * 0.5 + (centerY + centerSpeedY * time);
             
             const [ px, py ] = frame[pointIndex][1];
     
