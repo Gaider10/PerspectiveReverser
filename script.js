@@ -10,12 +10,15 @@ const CONFIG = {
 };
 
 function project(constants, variables, frameIndex, worldPoint) {
-    const [ offsetBy0_1, imageSizeY ] = constants;
-    const [ cameraX, cameraY, cameraZ, cameraSpeedX, cameraSpeedY, cameraSpeedZ, cameraSpeedW, cameraSpeedF, cameraSpeedR, cameraYaw, cameraPitch, cameraFov, padV, centerX, centerY, zoomCenterSpeedX, zoomCenterSpeedY, zoomSpeed, ...times ] = variables;
+    const [ offsetBy0_1, frameWidth, frameHeight ] = constants;
+    const [ cameraX, cameraY, cameraZ, cameraSpeedX, cameraSpeedY, cameraSpeedZ, cameraSpeedW, cameraSpeedF, cameraSpeedR, cameraYaw, cameraPitch, cameraFov, padV, screenMainFrameCenterDx, screenMainFrameCenterDy, screenFrameCenterSpeedX, screenFrameCenterSpeedY, screenZoomSpeed, ...times ] = variables;
     const time = times[frameIndex];
 
-    const fullImageSizeY = imageSizeY + padV - zoomSpeed * time;
-    
+    const screenHeight = frameHeight + padV;
+    const screenFrameCenterDx = screenMainFrameCenterDx + screenFrameCenterSpeedX * time;
+    const screenFrameCenterDy = screenMainFrameCenterDy + screenFrameCenterSpeedY * time;
+    const screenToFrameZoom = frameHeight / (frameHeight - screenZoomSpeed * time);
+
     const sinYaw = Math.sin(cameraYaw);
     const cosYaw = Math.cos(cameraYaw);
     const sinPitch = Math.sin(-cameraPitch);
@@ -46,15 +49,17 @@ function project(constants, variables, frameIndex, worldPoint) {
     const w4 = -z3 + (offsetBy0_1 ? -0.1 : 0);
     
     const w4Inv = w4 === 0 ? 0 : 1 / w4;
-    const x5 = x4 * w4Inv * fullImageSizeY * 0.5 + (centerX + zoomCenterSpeedX * time);
-    const y5 = y4 * w4Inv * fullImageSizeY * 0.5 + (centerY + zoomCenterSpeedY * time);
+    const x5 = (x4 * w4Inv * screenHeight * 0.5 - screenFrameCenterDx) * screenToFrameZoom + frameWidth / 2;
+    const y5 = (y4 * w4Inv * screenHeight * 0.5 - screenFrameCenterDy) * screenToFrameZoom + frameHeight / 2;
 
     return [ x5, y5 ];
 }
 
 function projectedError(constants, variables, frames) {
-    const [ offsetBy0_1, imageSizeY ] = constants;
-    const [ cameraX, cameraY, cameraZ, cameraSpeedX, cameraSpeedY, cameraSpeedZ, cameraSpeedW, cameraSpeedF, cameraSpeedR, cameraYaw, cameraPitch, cameraFov, padV, centerX, centerY, zoomCenterSpeedX, zoomCenterSpeedY, zoomSpeed, ...times ] = variables;
+    const [ offsetBy0_1, frameWidth, frameHeight ] = constants;
+    const [ cameraX, cameraY, cameraZ, cameraSpeedX, cameraSpeedY, cameraSpeedZ, cameraSpeedW, cameraSpeedF, cameraSpeedR, cameraYaw, cameraPitch, cameraFov, padV, screenMainFrameCenterDx, screenMainFrameCenterDy, screenFrameCenterSpeedX, screenFrameCenterSpeedY, screenZoomSpeed, ...times ] = variables;
+
+    const screenHeight = frameHeight + padV;
 
     const sinYaw = Math.sin(cameraYaw);
     const cosYaw = Math.cos(cameraYaw);
@@ -70,7 +75,9 @@ function projectedError(constants, variables, frames) {
         const frame = frames[frameIndex];
         const time = times[frameIndex];
 
-        const fullImageSizeY = imageSizeY + padV - zoomSpeed * time;
+        const screenFrameCenterDx = screenMainFrameCenterDx + screenFrameCenterSpeedX * time;
+        const screenFrameCenterDy = screenMainFrameCenterDy + screenFrameCenterSpeedY * time;
+        const screenToFrameZoom = frameHeight / (frameHeight - screenZoomSpeed * time);
 
         for (let pointIndex = 0; pointIndex < frames[frameIndex].length; pointIndex++) {
             const [ x0, y0, z0 ] = frame[pointIndex][0];
@@ -96,8 +103,8 @@ function projectedError(constants, variables, frames) {
             const w4 = -z3 + (offsetBy0_1 ? -0.1 : 0);
             
             const w4Inv = w4 === 0 ? 0 : 1 / w4;
-            const x5 = x4 * w4Inv * fullImageSizeY * 0.5 + (centerX + zoomCenterSpeedX * time);
-            const y5 = y4 * w4Inv * fullImageSizeY * 0.5 + (centerY + zoomCenterSpeedY * time);
+            const x5 = (x4 * w4Inv * screenHeight * 0.5 - screenFrameCenterDx) * screenToFrameZoom + frameWidth / 2;
+            const y5 = (y4 * w4Inv * screenHeight * 0.5 - screenFrameCenterDy) * screenToFrameZoom + frameHeight / 2;
             
             const [ px, py ] = frame[pointIndex][1];
     
@@ -471,10 +478,10 @@ window.addEventListener("load", () => {
      */
     let linesData = [];
 
-    let screenCanvasCenterX = 0;
-    let screenCanvasCenterY = 0;
+    let screenCanvasCenterDx = 0;
+    let screenCanvasCenterDy = 0;
     let zoomIndex = 0;
-    let screenToCanvasZoom = 1;
+    let screenToCanvasZoomMult = 1;
     
     /**
      * @type {HTMLDivElement}
@@ -511,7 +518,7 @@ window.addEventListener("load", () => {
         if (num === j) return i;
         return num;
     }
-
+    
     /**
      * 
      * @param {number} frameIndex 
@@ -525,30 +532,59 @@ window.addEventListener("load", () => {
     function setMainFrame(frameIndex) {
         if (frameIndex === state.mainFrameIndex) return;
 
-        const prevMainFrameIndex = state.mainFrameIndex;
+        if (frameIndex !== null && state.mainFrameIndex !== null) {
+            const deltaTime = state.frames[frameIndex].time - state.frames[state.mainFrameIndex].time;
+
+            const screenToCanvasTransformBefore = getFrameToCanvasTransform(frameIndex)[0];
+
+            // console.log(`${state.mainFrameIndex} ${frameIndex} ${deltaTime}`);
+    
+            const sinYaw = Math.sin(state.cameraYaw * (Math.PI / 180));
+            const cosYaw = Math.cos(state.cameraYaw * (Math.PI / 180));
+            const sinPitch = Math.sin(state.cameraPitch * (Math.PI / 180));
+            const cosPitch = Math.cos(state.cameraPitch * (Math.PI / 180));
+    
+            state.cameraX += (state.cameraSpeedX - state.cameraSpeedW * sinYaw - state.cameraSpeedF * sinYaw * cosPitch - state.cameraSpeedR * cosYaw) * deltaTime;
+            state.cameraY += (state.cameraSpeedY + state.cameraSpeedF * sinPitch) * deltaTime;
+            state.cameraZ += (state.cameraSpeedZ + state.cameraSpeedW * cosYaw + state.cameraSpeedF * cosYaw * cosPitch - state.cameraSpeedR * sinYaw) * deltaTime;
+    
+            const screenWidth = state.padLeft + frameWidth + state.padRight;
+            const screenHeight = state.padTop + frameHeight + state.padBottom;
+            // console.log(`screenWidth = ${screenWidth} screenHeight = ${screenHeight}`);
+            const frameToScreenZoom = (frameHeight - state.zoomSpeed * deltaTime) / frameHeight;
+            const screenFrameWidth = frameWidth * frameToScreenZoom;
+            const screenFrameHeight = frameHeight * frameToScreenZoom;
+            // console.log(`screenFrameWidth = ${screenFrameWidth} screenFrameHeight = ${screenFrameHeight}`);
+            const screenFrameCenterDx = (state.padLeft - state.padRight) / 2 + state.zoomCenterSpeedX * deltaTime;
+            const screenFrameCenterDy = (state.padTop - state.padBottom) / 2 + state.zoomCenterSpeedY * deltaTime;
+            // console.log(`screenFrameCenterDx = ${screenFrameCenterDx} screenFrameCenterDy = ${screenFrameCenterDy}`);
+            const screenFrameCenterX = screenWidth / 2 + screenFrameCenterDx;
+            const screenFrameCenterY = screenHeight / 2 + screenFrameCenterDy;
+            // console.log(`screenFrameCenterX = ${screenFrameCenterX} screenFrameCenterY = ${screenFrameCenterY}`);
+            const screenFrameMinX = screenFrameCenterX - screenFrameWidth / 2;
+            const screenFrameMaxX = screenFrameCenterX + screenFrameWidth / 2;
+            const screenFrameMinY = screenFrameCenterY - screenFrameHeight / 2;
+            const screenFrameMaxY = screenFrameCenterY + screenFrameHeight / 2;
+            // console.log(`screenFrameMinX = ${screenFrameMinX} screenFrameMaxX = ${screenFrameMaxX} screenFrameMinY = ${screenFrameMinY} screenFrameMaxY = ${screenFrameMaxY}`);
+            state.padLeft = (screenFrameMinX) / frameToScreenZoom;
+            state.padRight = (screenWidth - screenFrameMaxX) / frameToScreenZoom;
+            state.padTop = (screenFrameMinY) / frameToScreenZoom;
+            state.padBottom = (screenHeight - screenFrameMaxY) / frameToScreenZoom;
+            state.zoomCenterSpeedX *= 1 / frameToScreenZoom;
+            state.zoomCenterSpeedY *= 1 / frameToScreenZoom;
+            state.zoomSpeed *= 1 / frameToScreenZoom;
+
+            const screenToCanvasTransformAfter = getFrameToCanvasTransform(frameIndex)[0];
+
+            const { x: canvasScreenXBefore, y: canvasScreenYBefore } = screenToCanvasTransformBefore.transformPoint(new DOMPoint(0, 0));
+            const { x: canvasScreenXAfter, y: canvasScreenYAfter } = screenToCanvasTransformAfter.transformPoint(new DOMPoint(0, 0))
+            const screenToCanvasZoomAfter = screenToCanvasTransformAfter.m11;
+
+            screenCanvasCenterDx -= (canvasScreenXBefore - canvasScreenXAfter) / screenToCanvasZoomAfter;
+            screenCanvasCenterDy -= (canvasScreenYBefore - canvasScreenYAfter) / screenToCanvasZoomAfter;
+        }
+
         state.mainFrameIndex = frameIndex;
-        if (frameIndex === null || prevMainFrameIndex === null) return;
-
-        const deltaTime = state.frames[frameIndex].time - state.frames[prevMainFrameIndex].time;
-
-        const sinYaw = Math.sin(state.cameraYaw * (Math.PI / 180));
-        const cosYaw = Math.cos(state.cameraYaw * (Math.PI / 180));
-        const sinPitch = Math.sin(state.cameraPitch * (Math.PI / 180));
-        const cosPitch = Math.cos(state.cameraPitch * (Math.PI / 180));
-
-        state.cameraX += (state.cameraSpeedX - state.cameraSpeedW * sinYaw - state.cameraSpeedF * sinYaw * cosPitch - state.cameraSpeedR * cosYaw) * deltaTime;
-        state.cameraY += (state.cameraSpeedY + state.cameraSpeedF * sinPitch) * deltaTime;
-        state.cameraZ += (state.cameraSpeedZ + state.cameraSpeedW * cosYaw + state.cameraSpeedF * cosYaw * cosPitch - state.cameraSpeedR * sinYaw) * deltaTime;
-        const centerX = frameWidth / 2 + (state.padRight - state.padLeft) / 2 + state.zoomCenterSpeedX * deltaTime;
-        const centerY = frameHeight / 2 + (state.padBottom - state.padTop) / 2 + state.zoomCenterSpeedY * deltaTime;
-        const width = (state.padLeft + frameWidth + state.padRight);
-        const height = (state.padTop + frameHeight + state.padBottom);
-        const zoomedWidth = width - state.zoomSpeed * deltaTime * width / height;
-        const zoomedHeight = height - state.zoomSpeed * deltaTime;
-        state.padLeft = 0 - (centerX - zoomedWidth / 2);
-        state.padRight = (centerX + zoomedWidth / 2) - frameWidth;
-        state.padTop = 0 - (centerY - zoomedHeight / 2);
-        state.padBottom = (centerY + zoomedHeight / 2) - frameHeight;
     }
 
     /**
@@ -965,21 +1001,24 @@ window.addEventListener("load", () => {
                 const mouseCanvasDx = mouseCanvasX - prevMouseDownCanvasPos.x;
                 const mouseCanvasDy = mouseCanvasY - prevMouseDownCanvasPos.y;
 
-                if (draggedPointIndex !== null) {
-                    const frameIndex = frames.indexOf(frame);
+                const frameIndex = frames.indexOf(frame);
+                const [ screenToCanvasTransform, frameToCanvasTransform ] = getFrameToCanvasTransform(frameIndex);
 
+                if (draggedPointIndex !== null) {
                     const newPointCanvasX = mouseCanvasX + draggedPointCanvasOffsetX;
                     const newPointCanvasY = mouseCanvasY + draggedPointCanvasOffsetY;
                     
-                    const canvasToFrameTransform = getFrameToCanvasTransform(frameIndex)[1].invertSelf();
+                    const canvasToFrameTransform = frameToCanvasTransform.invertSelf();
                     const { x: newPointFrameX, y: newPointFrameY } = canvasToFrameTransform.transformPoint(new DOMPoint(newPointCanvasX, newPointCanvasY));
                     const roundedNewPointFrameX = roundTo(roundTo(newPointFrameX, 1 / canvasToFrameTransform.m11), 1000);
                     const roundedNewPointFrameY = roundTo(roundTo(newPointFrameY, 1 / canvasToFrameTransform.m22), 1000);
 
                     movePointProjected(frameIndex, draggedPointIndex, roundedNewPointFrameX, roundedNewPointFrameY);
                 } else {
-                    screenCanvasCenterX -= mouseCanvasDx / screenToCanvasZoom;
-                    screenCanvasCenterY -= mouseCanvasDy / screenToCanvasZoom;
+                    const screenToCanvasZoom = screenToCanvasTransform.m11;
+
+                    screenCanvasCenterDx -= mouseCanvasDx / screenToCanvasZoom;
+                    screenCanvasCenterDy -= mouseCanvasDy / screenToCanvasZoom;
                 }
                 
                 prevMouseDownCanvasPos = {
@@ -1001,18 +1040,23 @@ window.addEventListener("load", () => {
             const mouseCanvasX = event.offsetX;
             const mouseCanvasY = event.offsetY;
 
-            const prevZoom = screenToCanvasZoom;
+            const frameIndex = frames.indexOf(frame);
+            const [ screenToCanvasTransform, frameToCanvasTransform ] = getFrameToCanvasTransform(frameIndex);
+
+            const screenToCanvasZoom = screenToCanvasTransform.m11;
+
+            const prevZoomMult = screenToCanvasZoomMult;
             zoomIndex = Math.min(Math.max(zoomIndex + Math.sign(-event.deltaY) * CONFIG.zoomIndexStep, CONFIG.zoomIndexMin), CONFIG.zoomIndexMax);
-            screenToCanvasZoom = Math.pow(2, zoomIndex);
-            screenCanvasCenterX += (mouseCanvasX - canvas.clientWidth / 2) * (1 / prevZoom - 1 / screenToCanvasZoom);
-            screenCanvasCenterY += (mouseCanvasY - canvas.clientHeight / 2) * (1 / prevZoom - 1 / screenToCanvasZoom);
+            screenToCanvasZoomMult = Math.pow(2, zoomIndex);
+            screenCanvasCenterDx += (mouseCanvasX - canvas.clientWidth / 2) * (1 / screenToCanvasZoom - 1 / (screenToCanvasZoom * screenToCanvasZoomMult / prevZoomMult));
+            screenCanvasCenterDy += (mouseCanvasY - canvas.clientHeight / 2) * (1 / screenToCanvasZoom - 1 / (screenToCanvasZoom * screenToCanvasZoomMult / prevZoomMult));
             if (mouseDragging && draggedPointIndex !== null) {
                 const frameIndex = frames.indexOf(frame);
 
                 const newPointCanvasX = mouseCanvasX + draggedPointCanvasOffsetX;
                 const newPointCanvasY = mouseCanvasY + draggedPointCanvasOffsetY;
 
-                const canvasToFrameTransform = getFrameToCanvasTransform(frameIndex)[1].invertSelf();
+                const canvasToFrameTransform = frameToCanvasTransform.invertSelf();
                 const { x: newPointFrameX, y: newPointFrameY } = canvasToFrameTransform.transformPoint(new DOMPoint(newPointCanvasX, newPointCanvasY));
                 const roundedNewPointFrameX = roundTo(roundTo(newPointFrameX, 1 / canvasToFrameTransform.m11), 1000);
                 const roundedNewPointFrameY = roundTo(roundTo(newPointFrameY, 1 / canvasToFrameTransform.m22), 1000);
@@ -1162,10 +1206,10 @@ window.addEventListener("load", () => {
         }
 
         if (frameWidth !== null && (prevImageWidth !== frameWidth || prevImageHeight !== frameHeight)) {
-            screenCanvasCenterX = frameWidth / 2;
-            screenCanvasCenterY = frameHeight / 2;
+            screenCanvasCenterDx = 0;
+            screenCanvasCenterDy = 0;
             zoomIndex = Math.min(Math.max(-Math.ceil(Math.log2(Math.max(frameWidth / canvasClientWidth, frameHeight / canvasClientHeight)) * 2) / 2, CONFIG.zoomIndexMin), CONFIG.zoomIndexMax);
-            screenToCanvasZoom = Math.pow(2, zoomIndex);
+            screenToCanvasZoomMult = Math.pow(2, zoomIndex);
         }
 
         if (image !== null) {
@@ -2713,9 +2757,7 @@ window.addEventListener("load", () => {
             "perparam": perParamDescent,
             "random": randomDescent,
         })[state.reversalMethod];
-        const [ cameraX, cameraY, cameraZ, cameraSpeedX, cameraSpeedY, cameraSpeedZ, cameraSpeedW, cameraSpeedF, cameraSpeedR, cameraYaw, cameraPitch, cameraFov, padV, centerX, centerY, zoomCenterSpeedX, zoomCenterSpeedY, zoomSpeed, ...times ] = reverseProjection(constants, variablesInitial, variablesLocked, frames, descentFunc, state.iterations);
-        const offsetX = (centerX - frameWidth / 2);
-        const offsetY = (centerY - frameHeight / 2);
+        const [ cameraX, cameraY, cameraZ, cameraSpeedX, cameraSpeedY, cameraSpeedZ, cameraSpeedW, cameraSpeedF, cameraSpeedR, cameraYaw, cameraPitch, cameraFov, padV, screenMainFrameCenterDx, screenMainFrameCenterDy, screenFrameCenterSpeedX, screenFrameCenterSpeedY, screenZoomSpeed, ...times ] = reverseProjection(constants, variablesInitial, variablesLocked, frames, descentFunc, state.iterations);
         if (!state.cameraXLocked) state.cameraX = cameraX;
         if (!state.cameraYLocked) state.cameraY = cameraY;
         if (!state.cameraZLocked) state.cameraZ = cameraZ;
@@ -2728,14 +2770,14 @@ window.addEventListener("load", () => {
         if (!state.cameraYawLocked) state.cameraYaw = cameraYaw / (Math.PI / 180);
         if (!state.cameraPitchLocked) state.cameraPitch = cameraPitch / (Math.PI / 180);
         if (!state.cameraFovLocked) state.cameraFov = cameraFov / (Math.PI / 180);
-        const padH = state.padLeftLocked ? 2 * (state.padLeft + offsetX) : state.padRightLocked ? 2 * (state.padRight - offsetX) : Math.abs(offsetX * 2);
-        if (!state.padLeftLocked) state.padLeft = padH / 2 - offsetX;
-        if (!state.padRightLocked) state.padRight = padH / 2 + offsetX;
-        if (!state.padTopBottomLocked) state.padTop = padV / 2 - offsetY;
-        if (!state.padTopBottomLocked) state.padBottom = padV / 2 + offsetY;
-        if (!state.zoomCenterSpeedXLocked) state.zoomCenterSpeedX = zoomCenterSpeedX;
-        if (!state.zoomCenterSpeedYLocked) state.zoomCenterSpeedY = zoomCenterSpeedY;
-        if (!state.zoomSpeedLocked) state.zoomSpeed = zoomSpeed;
+        const padH = state.padLeftLocked ? 2 * (state.padLeft + screenMainFrameCenterDx) : state.padRightLocked ? 2 * (state.padRight - screenMainFrameCenterDx) : Math.abs(screenMainFrameCenterDx * 2);
+        if (!state.padLeftLocked) state.padLeft = padH / 2 - screenMainFrameCenterDx;
+        if (!state.padRightLocked) state.padRight = padH / 2 + screenMainFrameCenterDx;
+        if (!state.padTopBottomLocked) state.padTop = padV / 2 - screenMainFrameCenterDy;
+        if (!state.padTopBottomLocked) state.padBottom = padV / 2 + screenMainFrameCenterDy;
+        if (!state.zoomCenterSpeedXLocked) state.zoomCenterSpeedX = screenFrameCenterSpeedX;
+        if (!state.zoomCenterSpeedYLocked) state.zoomCenterSpeedY = screenFrameCenterSpeedY;
+        if (!state.zoomSpeedLocked) state.zoomSpeed = screenZoomSpeed;
         const mainFrameTime = state.frames[state.mainFrameIndex].time;
         for (let frameIndex = 0; frameIndex < state.frames.length; frameIndex++) {
             if (!state.frames[frameIndex].timeLocked) state.frames[frameIndex].time = times[frameIndex] + mainFrameTime;
@@ -2971,17 +3013,17 @@ window.addEventListener("load", () => {
         return Math.round(px * scale) / scale;
     }
 
-    function roundPx(px) {
-        return Math.round(px * screenToCanvasZoom) / screenToCanvasZoom;
-    }
+    // function roundPx(px) {
+    //     return Math.round(px * screenToCanvasZoomMult) / screenToCanvasZoomMult;
+    // }
 
-    function floorPx(px) {
-        return Math.floor(px * screenToCanvasZoom) / screenToCanvasZoom;
-    }
+    // function floorPx(px) {
+    //     return Math.floor(px * screenToCanvasZoomMult) / screenToCanvasZoomMult;
+    // }
 
-    function ceilPx(px) {
-        return Math.ceil(px * screenToCanvasZoom) / screenToCanvasZoom;
-    }
+    // function ceilPx(px) {
+    //     return Math.ceil(px * screenToCanvasZoomMult) / screenToCanvasZoomMult;
+    // }
 
     function requestRedraw() {
         window.requestAnimationFrame(redraw);
@@ -3132,56 +3174,57 @@ window.addEventListener("load", () => {
 
     function projectConstants() {
         return [
-            state.offsetBy01,
-            frameHeight,
+            state.offsetBy01, // offsetBy0_1
+            frameWidth, // frameWidth
+            frameHeight, // frameHeight
         ];
     }
 
     function projectVariables() {
         return [
-            state.cameraX,
-            state.cameraY,
-            state.cameraZ,
-            state.cameraSpeedX,
-            state.cameraSpeedY,
-            state.cameraSpeedZ,
-            state.cameraSpeedW,
-            state.cameraSpeedF,
-            state.cameraSpeedR,
-            state.cameraYaw * (Math.PI / 180),
-            state.cameraPitch * (Math.PI / 180),
-            state.cameraFov * (Math.PI / 180),
-            state.padTop + state.padBottom,
-            frameWidth / 2 + (state.padRight - state.padLeft) / 2,
-            frameHeight / 2 + (state.padBottom - state.padTop) / 2,
-            state.zoomCenterSpeedX,
-            state.zoomCenterSpeedY,
-            state.zoomSpeed,
-            ...state.frames.map((frame) => frame.time - state.frames[state.mainFrameIndex].time),
+            state.cameraX, // cameraX
+            state.cameraY, // cameraY
+            state.cameraZ, // cameraZ
+            state.cameraSpeedX, // cameraSpeedX
+            state.cameraSpeedY, // cameraSpeedY
+            state.cameraSpeedZ, // cameraSpeedZ
+            state.cameraSpeedW, // cameraSpeedW
+            state.cameraSpeedF, // cameraSpeedF
+            state.cameraSpeedR, // cameraSpeedR
+            state.cameraYaw * (Math.PI / 180), // cameraYaw
+            state.cameraPitch * (Math.PI / 180), // cameraPitch
+            state.cameraFov * (Math.PI / 180), // cameraFov
+            state.padTop + state.padBottom, // padV
+            (state.padLeft - state.padRight) / 2, // screenMainFrameCenterDx
+            (state.padTop - state.padBottom) / 2, // screenMainFrameCenterDy
+            state.zoomCenterSpeedX, // screenFrameCenterSpeedX
+            state.zoomCenterSpeedY, // screenFrameCenterSpeedY
+            state.zoomSpeed, // screenZoomSpeed
+            ...state.frames.map((frame) => frame.time - state.frames[state.mainFrameIndex].time), // times
         ];
     }
 
     function projectVariablesLocked() {
         return [
-            state.cameraXLocked,
-            state.cameraYLocked,
-            state.cameraZLocked,
-            state.cameraSpeedXLocked,
-            state.cameraSpeedYLocked,
-            state.cameraSpeedZLocked,
-            state.cameraSpeedWLocked,
-            state.cameraSpeedFLocked,
-            state.cameraSpeedRLocked,
-            state.cameraYawLocked,
-            state.cameraPitchLocked,
-            state.cameraFovLocked,
-            state.padTopBottomLocked,
-            state.padRightLocked && state.padLeftLocked,
-            state.padTopBottomLocked,
-            state.zoomCenterSpeedXLocked,
-            state.zoomCenterSpeedYLocked,
-            state.zoomSpeedLocked,
-            ...state.frames.map((frame) => frame.timeLocked),
+            state.cameraXLocked, // cameraX
+            state.cameraYLocked, // cameraY
+            state.cameraZLocked, // cameraZ
+            state.cameraSpeedXLocked, // cameraSpeedX
+            state.cameraSpeedYLocked, // cameraSpeedY
+            state.cameraSpeedZLocked, // cameraSpeedZ
+            state.cameraSpeedWLocked, // cameraSpeedW
+            state.cameraSpeedFLocked, // cameraSpeedF
+            state.cameraSpeedRLocked, // cameraSpeedR
+            state.cameraYawLocked, // cameraYaw
+            state.cameraPitchLocked, // cameraPitch
+            state.cameraFovLocked, // cameraFov
+            state.padTopBottomLocked, // padV
+            state.padRightLocked && state.padLeftLocked, // screenMainFrameCenterDx
+            state.padTopBottomLocked, // screenMainFrameCenterDy
+            state.zoomCenterSpeedXLocked, // screenFrameCenterSpeedX
+            state.zoomCenterSpeedYLocked, // screenFrameCenterSpeedY
+            state.zoomSpeedLocked, // screenZoomSpeed
+            ...state.frames.map((frame) => frame.timeLocked), // times
         ];
     }
 
@@ -3197,22 +3240,30 @@ window.addEventListener("load", () => {
     function getFrameToCanvasTransform(frameIndex) {
         const transform = new DOMMatrix([ 1, 0, 0, 1, 0, 0 ]);
 
+        const screenWidth = state.padLeft + frameWidth + state.padRight;
+        const screenHeight = state.padTop + frameHeight + state.padBottom;
+        const screenCanvasCenterX = screenWidth / 2 + screenCanvasCenterDx;
+        const screenCanvasCenterY = screenHeight / 2 + screenCanvasCenterDy;
+
+        const canvasScreenHeight = 720;
+        const screenToCanvasZoom = screenToCanvasZoomMult * canvasScreenHeight / screenHeight;
+
         transform.translateSelf(frames[frameIndex].canvas.width / 2, frames[frameIndex].canvas.height / 2);
         transform.scaleSelf(screenToCanvasZoom, screenToCanvasZoom);
-        transform.translateSelf(-roundPx(screenCanvasCenterX), -roundPx(screenCanvasCenterY));
+        // transform.translateSelf(-roundPx(screenCanvasCenterX), -roundPx(screenCanvasCenterY));
+        transform.translateSelf(-screenCanvasCenterX, -screenCanvasCenterY);
         
         const deltaTime = state.frames[frameIndex].time - state.frames[state.mainFrameIndex].time;
         const screenMainFrameCenterX = state.padLeft + frameWidth / 2;
         const screenMainFrameCenterY = state.padTop + frameHeight / 2;
         const screenFrameCenterX = screenMainFrameCenterX + state.zoomCenterSpeedX * deltaTime;
         const screenFrameCenterY = screenMainFrameCenterY + state.zoomCenterSpeedY * deltaTime;
-        const screenFrameWidth = frameWidth - state.zoomSpeed * deltaTime * frameWidth / frameHeight;
-        const screenFrameHeight = frameHeight - state.zoomSpeed * deltaTime;
+        const frameToScreenZoom = (frameHeight - state.zoomSpeed * deltaTime) / frameHeight;
         
         const screenToCanvasTransform = DOMMatrix.fromMatrix(transform);
         
         transform.translateSelf(screenFrameCenterX, screenFrameCenterY);
-        transform.scaleSelf(screenFrameWidth / frameWidth, screenFrameHeight / frameHeight);
+        transform.scaleSelf(frameToScreenZoom, frameToScreenZoom);
         transform.translateSelf(-frameWidth / 2, -frameHeight / 2);
 
         return [ screenToCanvasTransform, transform ];
@@ -3248,10 +3299,11 @@ window.addEventListener("load", () => {
             context.imageSmoothingEnabled = state.showBlur;
 
             const [ screenToCanvasTransform, frameToCanvasTransform ] = getFrameToCanvasTransform(frameIndex);
-
+            const screenToCanvasZoom = screenToCanvasTransform.m11;
             const frameToCanvasZoom = frameToCanvasTransform.m11;
 
             context.setTransform(frameToCanvasTransform);
+
             context.drawImage(frame.offscreenCanvas, 0, 0, frameWidth, frameHeight);
             
             context.setTransform(screenToCanvasTransform);
