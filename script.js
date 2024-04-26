@@ -11,7 +11,7 @@ const CONFIG = {
 
 function project(constants, variables, frameIndex, worldPoint) {
     const [ offsetBy0_1, imageSizeY ] = constants;
-    const [ cameraX, cameraY, cameraZ, cameraSpeedX, cameraSpeedY, cameraSpeedZ, cameraSpeedW, cameraSpeedF, cameraSpeedR, cameraYaw, cameraPitch, cameraFov, padV, centerX, centerY, ...times ] = variables;
+    const [ cameraX, cameraY, cameraZ, cameraSpeedX, cameraSpeedY, cameraSpeedZ, cameraSpeedW, cameraSpeedF, cameraSpeedR, cameraYaw, cameraPitch, cameraFov, padV, centerX, centerY, centerSpeedX, centerSpeedY, zoomSpeed, ...times ] = variables;
     const time = times[frameIndex];
 
     const fullImageSizeY = imageSizeY + padV;
@@ -46,15 +46,15 @@ function project(constants, variables, frameIndex, worldPoint) {
     const w4 = -z3 + (offsetBy0_1 ? -0.1 : 0);
     
     const w4Inv = w4 === 0 ? 0 : 1 / w4;
-    const x5 = x4 * w4Inv * fullImageSizeY * 0.5 + centerX;
-    const y5 = y4 * w4Inv * fullImageSizeY * 0.5 + centerY;
+    const x5 = x4 * w4Inv * fullImageSizeY * 0.5 * Math.pow(zoomSpeed, time) + (centerX + centerSpeedX * time);
+    const y5 = y4 * w4Inv * fullImageSizeY * 0.5 * Math.pow(zoomSpeed, time) + (centerY + centerSpeedY * time);
 
     return [ x5, y5 ];
 }
 
 function projectedError(constants, variables, frames) {
     const [ offsetBy0_1, imageSizeY ] = constants;
-    const [ cameraX, cameraY, cameraZ, cameraSpeedX, cameraSpeedY, cameraSpeedZ, cameraSpeedW, cameraSpeedF, cameraSpeedR, cameraYaw, cameraPitch, cameraFov, padV, centerX, centerY, ...times ] = variables;
+    const [ cameraX, cameraY, cameraZ, cameraSpeedX, cameraSpeedY, cameraSpeedZ, cameraSpeedW, cameraSpeedF, cameraSpeedR, cameraYaw, cameraPitch, cameraFov, padV, centerX, centerY, centerSpeedX, centerSpeedY, zoomSpeed, ...times ] = variables;
 
     const fullImageSizeY = imageSizeY + padV;
     
@@ -96,8 +96,8 @@ function projectedError(constants, variables, frames) {
             const w4 = -z3 + (offsetBy0_1 ? -0.1 : 0);
             
             const w4Inv = w4 === 0 ? 0 : 1 / w4;
-            const x5 = x4 * w4Inv * fullImageSizeY * 0.5 + centerX;
-            const y5 = y4 * w4Inv * fullImageSizeY * 0.5 + centerY;
+            const x5 = x4 * w4Inv * fullImageSizeY * 0.5 * Math.pow(zoomSpeed, time) + (centerX + centerSpeedX * time);
+            const y5 = y4 * w4Inv * fullImageSizeY * 0.5 * Math.pow(zoomSpeed, time) + (centerY + centerSpeedY * time);
             
             const [ px, py ] = frame[pointIndex][1];
     
@@ -383,6 +383,12 @@ window.addEventListener("load", () => {
      *     padTopLocked: boolean,
      *     padBottom: number,
      *     padBottomLocked: boolean,
+     *     centerSpeedX: number,
+     *     centerSpeedXLocked: boolean,
+     *     centerSpeedY: number,
+     *     centerSpeedYLocked: boolean,
+     *     zoomSpeed: number,
+     *     zoomSpeedLocked: boolean,
      *     reversalMethod: "gradient" | "perparam" | "random",
      *     iterations: number,
      *     moveWorldX: number,
@@ -437,6 +443,12 @@ window.addEventListener("load", () => {
         padTopLocked: true,
         padBottom: 0,
         padBottomLocked: true,
+        centerSpeedX: 0,
+        centerSpeedXLocked: true,
+        centerSpeedY: 0,
+        centerSpeedYLocked: true,
+        zoomSpeed: 1,
+        zoomSpeedLocked: true,
         reversalMethod: "perparam",
         iterations: 1000,
         moveWorldX: 0,
@@ -2523,6 +2535,61 @@ window.addEventListener("load", () => {
     /**
      * @type {HTMLInputElement}
      */
+    const centerSpeedXInput = document.getElementById("input-center-speed-x");
+    /**
+     * @type {HTMLInputElement}
+     */
+    const centerSpeedXLockedInput = document.getElementById("input-center-speed-x-locked");
+    /**
+     * @type {HTMLInputElement}
+     */
+    const centerSpeedYInput = document.getElementById("input-center-speed-y");
+    /**
+     * @type {HTMLInputElement}
+     */
+    const centerSpeedYLockedInput = document.getElementById("input-center-speed-y-locked");
+
+    initCoordsInputs([ centerSpeedXInput, centerSpeedYInput ], (values) => {
+        [ state.centerSpeedX, state.centerSpeedY ] = values;
+
+        requestRedraw();
+    });
+
+    centerSpeedXLockedInput.addEventListener("change", (event) => {
+        state.centerSpeedXLocked = centerSpeedXLockedInput.checked;
+
+        requestRedraw();
+    });
+    centerSpeedYLockedInput.addEventListener("change", (event) => {
+        state.centerSpeedYLocked = centerSpeedYLockedInput.checked;
+
+        requestRedraw();
+    });
+
+    /**
+     * @type {HTMLInputElement}
+     */
+    const zoomSpeedInput = document.getElementById("input-zoom-speed");
+    /**
+     * @type {HTMLInputElement}
+     */
+    const zoomSpeedLockedInput = document.getElementById("input-zoom-speed-locked");
+
+    initCoordsInputs([ zoomSpeedInput ], (values) => {
+        [ state.zoomSpeed ] = values;
+
+        requestRedraw();
+    });
+
+    zoomSpeedLockedInput.addEventListener("change", (event) => {
+        state.zoomSpeedLocked = zoomSpeedLockedInput.checked;
+
+        requestRedraw();
+    });
+
+    /**
+     * @type {HTMLInputElement}
+     */
     const cameraTpCopyInput = document.getElementById("input-camera-tp-copy");
     cameraTpCopyInput.addEventListener("click", (event) => {
         navigator.clipboard.writeText(`/tp @s ${state.cameraX} ${state.cameraY - 1.62} ${state.cameraZ} ${state.cameraYaw} ${state.cameraPitch}`);
@@ -2584,7 +2651,7 @@ window.addEventListener("load", () => {
             "perparam": perParamDescent,
             "random": randomDescent,
         })[state.reversalMethod];
-        const [ cameraX, cameraY, cameraZ, cameraSpeedX, cameraSpeedY, cameraSpeedZ, cameraSpeedW, cameraSpeedF, cameraSpeedR, cameraYaw, cameraPitch, cameraFov, padV, centerX, centerY, ...times ] = reverseProjection(constants, variablesInitial, variablesLocked, frames, descentFunc, state.iterations);
+        const [ cameraX, cameraY, cameraZ, cameraSpeedX, cameraSpeedY, cameraSpeedZ, cameraSpeedW, cameraSpeedF, cameraSpeedR, cameraYaw, cameraPitch, cameraFov, padV, centerX, centerY, centerSpeedX, centerSpeedY, zoomSpeed, ...times ] = reverseProjection(constants, variablesInitial, variablesLocked, frames, descentFunc, state.iterations);
         const offsetX = (centerX - imageWidth / 2);
         const offsetY = (centerY - imageHeight / 2);
         if (!state.cameraXLocked) state.cameraX = cameraX;
@@ -2604,6 +2671,9 @@ window.addEventListener("load", () => {
         if (!state.padRightLocked) state.padRight = padH / 2 + offsetX;
         if (!state.padTopLocked) state.padTop = padV / 2 - offsetY;
         if (!state.padBottomLocked) state.padBottom = padV / 2 + offsetY;
+        if (!state.centerSpeedXLocked) state.centerSpeedX = centerSpeedX;
+        if (!state.centerSpeedYLocked) state.centerSpeedY = centerSpeedY;
+        if (!state.zoomSpeedLocked) state.zoomSpeed = zoomSpeed;
         const mainFrameTime = state.frames[state.mainFrameIndex].time;
         for (let frameIndex = 0; frameIndex < state.frames.length; frameIndex++) {
             if (!state.frames[frameIndex].timeLocked) state.frames[frameIndex].time = times[frameIndex] + mainFrameTime;
@@ -2959,6 +3029,14 @@ window.addEventListener("load", () => {
         padTopLockedInput.checked = state.padTopLocked;
         padBottomLockedInput.checked = state.padBottomLocked;
 
+        centerSpeedXInput.value = state.centerSpeedX;
+        centerSpeedYInput.value = state.centerSpeedY;
+        zoomSpeedInput.value = state.zoomSpeed;
+        
+        centerSpeedXLockedInput.checked = state.centerSpeedXLocked;
+        centerSpeedYLockedInput.checked = state.centerSpeedYLocked;
+        zoomSpeedLockedInput.checked = state.zoomSpeedLocked;
+
         reversalMethodSelect.value = state.reversalMethod;
         iterationsInput.value = state.iterations;
 
@@ -3010,6 +3088,9 @@ window.addEventListener("load", () => {
             state.padTop + state.padBottom,
             imageWidth / 2 + (state.padRight - state.padLeft) / 2,
             imageHeight / 2 + (state.padBottom - state.padTop) / 2,
+            state.centerSpeedX,
+            state.centerSpeedY,
+            state.zoomSpeed,
             ...state.frames.map((frame) => frame.time - state.frames[state.mainFrameIndex].time),
         ];
     }
@@ -3031,6 +3112,9 @@ window.addEventListener("load", () => {
             state.padTopLocked || state.padBottomLocked,
             state.padRightLocked || state.padLeftLocked,
             state.padTopLocked || state.padBottomLocked,
+            state.centerSpeedXLocked,
+            state.centerSpeedYLocked,
+            state.zoomSpeedLocked,
             ...state.frames.map((frame) => frame.timeLocked),
         ];
     }
