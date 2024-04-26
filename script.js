@@ -3218,32 +3218,6 @@ window.addEventListener("load", () => {
         return [ screenToCanvasTransform, transform ];
     }
 
-    /**
-     * 
-     * @param {number} frameIndex 
-     * @param {number} frameX 
-     * @param {number} frameY 
-     * @returns {[ canvasX: number, canvasY: number ]}
-     */
-    function frameToCanvasPoint(frameIndex, frameX, frameY) {
-        const [ _, frameTransform ] = getFrameToCanvasTransform(frameIndex);
-        const canvasP = frameTransform.transformPoint(new DOMPoint(frameX, frameY));
-        return [ canvasP.x, canvasP.y ];
-    }
-
-    /**
-     * 
-     * @param {number} frameIndex 
-     * @param {number} canvasX 
-     * @param {number} canvasY 
-     * @returns {[ frameX: number, frameY: number ]}
-     */
-    function canvasToFramePoint(frameIndex, canvasX, canvasY) {
-        const [ _, frameTransform ] = getFrameToCanvasTransform(frameIndex);
-        const frameP = frameTransform.invertSelf().transformPoint(new DOMPoint(canvasX, canvasY));
-        return [ frameP.x, frameP.y ];
-    }
-
     function redraw() {
         // const framesElementRect = divFrames.getBoundingClientRect();
 
@@ -3298,27 +3272,31 @@ window.addEventListener("load", () => {
 
             context.setTransform(frameToCanvasTransform);
 
-            if (state.showGrid && screenToCanvasZoom >= 8) {
-                const minX = Math.max(Math.floor(floorPx(screenCanvasCenterX - canvas.width / 2 / screenToCanvasZoom)), 0);
-                const maxX = Math.min(Math.ceil(ceilPx(screenCanvasCenterX + canvas.width / 2 / screenToCanvasZoom)), frameWidth);
-                const minY = Math.max(Math.floor(floorPx(screenCanvasCenterY - canvas.height / 2 / screenToCanvasZoom)), 0);
-                const maxY = Math.min(Math.ceil(ceilPx(screenCanvasCenterY + canvas.height / 2 / screenToCanvasZoom)), frameHeight);
+            if (state.showGrid && Math.abs(frameToCanvasZoom) >= 8) {
+                const canvasToFrameTransform = frameToCanvasTransform.inverse();
+
+                const { x: frameCanvasMinX, y: frameCanvasMinY } = canvasToFrameTransform.transformPoint(new DOMPoint(0, 0));
+                const { x: frameCanvasMaxX, y: frameCanvasMaxY } = canvasToFrameTransform.transformPoint(new DOMPoint(canvas.width, canvas.height));
+                const clampedFrameCanvasMinX = Math.max(Math.floor(Math.min(frameCanvasMinX, frameCanvasMaxX)), 0);
+                const clampedFrameCanvasMinY = Math.max(Math.floor(Math.min(frameCanvasMinY, frameCanvasMaxY)), 0);
+                const clampedFrameCanvasMaxX = Math.min(Math.ceil(Math.max(frameCanvasMinX, frameCanvasMaxX)), frameWidth);
+                const clampedFrameCanvasMaxY = Math.min(Math.ceil(Math.max(frameCanvasMinY, frameCanvasMaxY)), frameHeight);
 
                 context.beginPath();
 
-                for (let x = minX; x <= maxX; x++) {
-                    context.moveTo(x, minY);
-                    context.lineTo(x, maxY);
+                for (let x = clampedFrameCanvasMinX; x <= clampedFrameCanvasMaxX; x++) {
+                    context.moveTo(x, clampedFrameCanvasMinY);
+                    context.lineTo(x, clampedFrameCanvasMaxY);
                 }
 
-                for (let y = minY; y <= maxY; y++) {
-                    context.moveTo(minX, y);
-                    context.lineTo(maxX, y);
+                for (let y = clampedFrameCanvasMinY; y <= clampedFrameCanvasMaxY; y++) {
+                    context.moveTo(clampedFrameCanvasMinX, y);
+                    context.lineTo(clampedFrameCanvasMaxX, y);
                 }
 
-                context.lineWidth = 1 / screenToCanvasZoom;
+                context.lineWidth = 1 / Math.abs(frameToCanvasZoom);
                 context.strokeStyle = "#aaa";
-                context.setLineDash([1 / screenToCanvasZoom])
+                context.setLineDash([1 / Math.abs(frameToCanvasZoom)])
                 context.stroke();
             }
             context.setLineDash([]);
@@ -3537,23 +3515,23 @@ window.addEventListener("load", () => {
                 // context.fill();
             }
             
-            context.lineWidth = Math.abs(1 / frameToCanvasZoom);
+            context.lineWidth = 1 / Math.abs(frameToCanvasZoom);
             context.strokeStyle = "#00fb";
             context.stroke(lineSplitPath);
             
-            context.lineWidth = Math.abs(1 / frameToCanvasZoom);
+            context.lineWidth = 1 / Math.abs(frameToCanvasZoom);
             context.strokeStyle = "#f00b";
             context.stroke(pixelEmptyPath);
             
-            context.lineWidth = Math.abs(1 / frameToCanvasZoom);
+            context.lineWidth = 1 / Math.abs(frameToCanvasZoom);
             context.strokeStyle = "#0f0b";
             context.stroke(pixelFilledPath);
             
-            context.lineWidth = Math.abs(1 / frameToCanvasZoom);
+            context.lineWidth = 1 / Math.abs(frameToCanvasZoom);
             context.strokeStyle = "#f904";
             context.stroke(lineCenterPath);
             
-            context.lineWidth = Math.abs(1 / frameToCanvasZoom);
+            context.lineWidth = 1 / Math.abs(frameToCanvasZoom);
             context.strokeStyle = "#f90b";
             context.stroke(selectedLineCenterPath);
 
