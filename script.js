@@ -3198,13 +3198,11 @@ window.addEventListener("load", () => {
         transform.translateSelf(-roundPx(screenCanvasCenterX), -roundPx(screenCanvasCenterY));
         
         const deltaTime = state.frames[frameIndex].time - state.frames[state.mainFrameIndex].time;
-        const screenWidth = (state.padLeft + imageWidth + state.padRight);
-        const screenHeight = (state.padTop + imageHeight + state.padBottom);
         const screenMainFrameCenterX = state.padLeft + imageWidth / 2;
         const screenMainFrameCenterY = state.padTop + imageHeight / 2;
         const screenFrameCenterX = screenMainFrameCenterX + state.zoomCenterSpeedX * deltaTime;
         const screenFrameCenterY = screenMainFrameCenterY + state.zoomCenterSpeedY * deltaTime;
-        const screenFrameWidth = imageWidth - state.zoomSpeed * deltaTime * screenWidth / screenHeight;
+        const screenFrameWidth = imageWidth - state.zoomSpeed * deltaTime * imageWidth / imageHeight;
         const screenFrameHeight = imageHeight - state.zoomSpeed * deltaTime;
         
         const screenToCanvasTransform = DOMMatrix.fromMatrix(transform);
