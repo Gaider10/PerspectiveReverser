@@ -380,9 +380,8 @@ window.addEventListener("load", () => {
      *     padRight: number,
      *     padRightLocked: boolean,
      *     padTop: number,
-     *     padTopLocked: boolean,
      *     padBottom: number,
-     *     padBottomLocked: boolean,
+     *     padTopBottomLocked: boolean,
      *     centerSpeedX: number,
      *     centerSpeedXLocked: boolean,
      *     centerSpeedY: number,
@@ -440,9 +439,8 @@ window.addEventListener("load", () => {
         padRight: 0,
         padRightLocked: true,
         padTop: 0,
-        padTopLocked: true,
         padBottom: 0,
-        padBottomLocked: true,
+        padTopBottomLocked: true,
         centerSpeedX: 0,
         centerSpeedXLocked: true,
         centerSpeedY: 0,
@@ -2494,19 +2492,9 @@ window.addEventListener("load", () => {
      * @type {HTMLInputElement}
      */
     const padTopInput = document.getElementById("input-pad-top");
-    /**
-     * @type {HTMLInputElement}
-     */
-    const padTopLockedInput = document.getElementById("input-pad-top-locked");
 
     initCoordsInputs([ padTopInput ], (values) => {
         [ state.padTop ] = values;
-
-        requestRedraw();
-    });
-    
-    padTopLockedInput.addEventListener("change", (event) => {
-        state.padTopLocked = padTopLockedInput.checked;
 
         requestRedraw();
     });
@@ -2515,19 +2503,20 @@ window.addEventListener("load", () => {
      * @type {HTMLInputElement}
      */
     const padBottomInput = document.getElementById("input-pad-bottom");
-    /**
-     * @type {HTMLInputElement}
-     */
-    const padBottomLockedInput = document.getElementById("input-pad-bottom-locked");
-
+    
     initCoordsInputs([ padBottomInput ], (values) => {
         [ state.padBottom ] = values;
-
+        
         requestRedraw();
     });
     
-    padBottomLockedInput.addEventListener("change", (event) => {
-        state.padBottomLocked = padBottomLockedInput.checked;
+    /**
+     * @type {HTMLInputElement}
+     */
+    const padTopBottomLockedInput = document.getElementById("input-pad-top-bottom-locked");
+
+    padTopBottomLockedInput.addEventListener("change", (event) => {
+        state.padTopBottomLocked = padTopBottomLockedInput.checked;
 
         requestRedraw();
     });
@@ -2669,8 +2658,8 @@ window.addEventListener("load", () => {
         const padH = state.padLeftLocked ? 2 * (state.padLeft + offsetX) : state.padRightLocked ? 2 * (state.padRight - offsetX) : Math.abs(offsetX * 2);
         if (!state.padLeftLocked) state.padLeft = padH / 2 - offsetX;
         if (!state.padRightLocked) state.padRight = padH / 2 + offsetX;
-        if (!state.padTopLocked) state.padTop = padV / 2 - offsetY;
-        if (!state.padBottomLocked) state.padBottom = padV / 2 + offsetY;
+        if (!state.padTopBottomLocked) state.padTop = padV / 2 - offsetY;
+        if (!state.padTopBottomLocked) state.padBottom = padV / 2 + offsetY;
         if (!state.centerSpeedXLocked) state.centerSpeedX = centerSpeedX;
         if (!state.centerSpeedYLocked) state.centerSpeedY = centerSpeedY;
         if (!state.zoomSpeedLocked) state.zoomSpeed = zoomSpeed;
@@ -3026,8 +3015,7 @@ window.addEventListener("load", () => {
 
         padLeftLockedInput.checked = state.padLeftLocked;
         padRightLockedInput.checked = state.padRightLocked;
-        padTopLockedInput.checked = state.padTopLocked;
-        padBottomLockedInput.checked = state.padBottomLocked;
+        padTopBottomLockedInput.checked = state.padTopBottomLocked;
 
         centerSpeedXInput.value = state.centerSpeedX;
         centerSpeedYInput.value = state.centerSpeedY;
@@ -3109,9 +3097,9 @@ window.addEventListener("load", () => {
             state.cameraYawLocked,
             state.cameraPitchLocked,
             state.cameraFovLocked,
-            state.padTopLocked || state.padBottomLocked,
-            state.padRightLocked || state.padLeftLocked,
-            state.padTopLocked || state.padBottomLocked,
+            state.padTopBottomLocked,
+            state.padRightLocked && state.padLeftLocked,
+            state.padTopBottomLocked,
             state.centerSpeedXLocked,
             state.centerSpeedYLocked,
             state.zoomSpeedLocked,
