@@ -114,22 +114,98 @@ function projectedError(constants, variables, frames) {
     return totalError / pointCount;
 }
 
-function reverseProjection(constants, variablesInitial, variablesLocked, frames, iterations) {
-    const variables = Array.from(variablesInitial);
-    const steps = variablesLocked.map((locked) => locked ? 0 : 1);
+/**
+ * @typedef {(params: number[]) => number} ErrorFunc
+ * @typedef {(paramValues: number[], paramLocks: boolean[], errorFunc: ErrorFunc, iteration: number) => number[]} DescentFunc
+ */
+
+/**
+ * @type {DescentFunc}
+ */
+function gradientDescent(paramValues, paramLocks, errorFunc, iterations) {
+    if (paramValues.length !== paramLocks.length) throw new Error("paramValues.length !== paramLocks.length");
+
+    let params = Array.from(paramValues);
+    let newParams = Array.from(paramValues);
+    const deltas = Array(params.length).fill(0);
+
+    let error = errorFunc(params);
+
+    const deltaStep = 1e-6;
+    
+    for (let i = 0; i < iterations; i++) {
+        let paramStep = 1e-1;
+
+        for (let j = 0; j < params.length; j++) {
+            if (!paramLocks[j]) {
+                const tmp = params[j];
+                params[j] += deltaStep;
+                deltas[j] = errorFunc(params) - error;
+                params[j] = tmp;
+            }
+        }
+
+        let deltaLenSq = 0;
+        for (let j = 0; j < params.length; j++) {
+            deltaLenSq += deltas[j] ** 2;
+        }
+        const deltaLen = Math.sqrt(deltaLenSq);
+
+        // console.log(`deltaLen ${deltaLen}`);
+
+        if (deltaLen < 1e-12) {
+            console.log(`deltaLen < 1e-12 at iteration ${i}`);
+            break;
+        }
+        
+        let newError;
+        while (true) {
+            for (let j = 0; j < params.length; j++) {
+                newParams[j] = params[j] - deltas[j] / deltaLen * paramStep;
+            }
+            
+            newError = errorFunc(newParams)
+            if (newError <= error) break;
+
+            paramStep *= 0.5;
+        }
+
+        if (paramStep < 1e-12) {
+            console.log(`Stopped early at iteration ${i}`);
+            break;
+        }
+        
+        for (let j = 0; j < params.length; j++) {
+            params[j] = newParams[j];
+        }
+        error = newError;
+    }
+
+    return params;
+}
+
+
+/**
+ * @type {DescentFunc}
+ */
+function perParamDescent(paramValues, paramLocks, errorFunc, iterations) {
+    if (paramValues.length !== paramLocks.length) throw new Error("variables.length !== variablesLocked.length");
+
+    const params = Array.from(paramValues);
+    const steps = paramLocks.map((locked) => locked ? 0 : 1);
 
     for (let i = 0; i < iterations; i++) {
-        for (let j = 0; j < variables.length; j++) {
+        for (let j = 0; j < params.length; j++) {
             if (steps[j] === 0) continue;
 
-            let minError = projectedError(constants, variables, frames);
+            let minError = errorFunc(params);
             let minStepIndex = 0;
 
             for (let k = -1; k <= 1; k += 2) {
-                const value = variables[j];
-                variables[j] += steps[j] * k;
-                const error = projectedError(constants, variables, frames);
-                variables[j] = value;
+                const tmp = params[j];
+                params[j] += steps[j] * k;
+                const error = errorFunc(params);
+                params[j] = tmp;
                 if (error < minError) {
                     minError = error;
                     minStepIndex = k;
@@ -139,12 +215,60 @@ function reverseProjection(constants, variablesInitial, variablesLocked, frames,
             if (minStepIndex === 0) {
                 steps[j] *= 0.5;
             } else {
-                variables[j] = variables[j] + steps[j] * minStepIndex;
+                params[j] = params[j] + steps[j] * minStepIndex;
             }
         }
     }
 
-    return variables;
+    return params;
+}
+
+
+/**
+ * @type {DescentFunc}
+ */
+function randomDescent(paramValues, paramLocks, errorFunc, iterations) {
+    if (paramValues.length !== paramLocks.length) throw new Error("variables.length !== variablesLocked.length");
+
+    let params = Array.from(paramValues);
+    let newParams = Array.from(paramValues);
+
+    let error = errorFunc(params);
+
+    for (let i = 0; i < iterations; i++) {
+        let paramStep = (1 - i / iterations) * 1e-2;
+
+        for (let j = 0; j < params.length; j++) {
+            if (!paramLocks[j]) {
+                newParams[j] = params[j] + (Math.random() - 0.5) * paramStep;
+            }
+        }
+        
+        let newError = errorFunc(newParams);
+
+        if (newError <= error) {
+            for (let j = 0; j < params.length; j++) {
+                params[j] = newParams[j];
+            }
+            error = newError;
+        }
+    }
+
+    return params;
+}
+
+/**
+ * 
+ * @param {number[]} constants 
+ * @param {number[]} variablesInitial 
+ * @param {boolean[]} variablesLocked 
+ * @param {object} frames 
+ * @param {DescentFunc} descentFunc 
+ * @param {number} iterations 
+ * @returns {number[]}
+ */
+function reverseProjection(constants, variablesInitial, variablesLocked, frames, descentFunc, iterations) {
+    return descentFunc(variablesInitial, variablesLocked, (params) => projectedError(constants, params, frames), iterations);
 }
 
 /**
@@ -259,6 +383,7 @@ window.addEventListener("load", () => {
      *     padTopLocked: boolean,
      *     padBottom: number,
      *     padBottomLocked: boolean,
+     *     reversalMethod: "gradient" | "perparam" | "random",
      *     iterations: number,
      *     moveWorldX: number,
      *     moveWorldY: number,
@@ -312,6 +437,7 @@ window.addEventListener("load", () => {
         padTopLocked: true,
         padBottom: 0,
         padBottomLocked: true,
+        reversalMethod: "perparam",
         iterations: 1000,
         moveWorldX: 0,
         moveWorldY: 0,
@@ -428,6 +554,7 @@ window.addEventListener("load", () => {
         frameImageDiv.appendChild(imageNameLabel);
         const imageInput = document.createElement("input");
         imageInput.type = "file";
+        imageInput.accept = "image/*";
         imageInput.style.display = "none";
         imageInput.addEventListener("change", () => {
             if (imageInput.files.length === 0) return;
@@ -2421,6 +2548,16 @@ window.addEventListener("load", () => {
     });
 
     /**
+     * @type {HTMLSelectElement}
+     */
+    const reversalMethodSelect = document.getElementById("select-reversal-method");
+    reversalMethodSelect.addEventListener("change", () => {
+        state.reversalMethod = reversalMethodSelect.value;
+
+        requestRedraw();
+    });
+
+    /**
      * @type {HTMLInputElement}
      */
     const iterationsInput = document.getElementById("input-iterations");
@@ -2442,7 +2579,12 @@ window.addEventListener("load", () => {
         const variablesInitial = projectVariables();
         const variablesLocked = projectVariablesLocked();
         const frames = projectFrames();
-        const [ cameraX, cameraY, cameraZ, cameraSpeedX, cameraSpeedY, cameraSpeedZ, cameraSpeedW, cameraSpeedF, cameraSpeedR, cameraYaw, cameraPitch, cameraFov, padV, centerX, centerY, ...times ] = reverseProjection(constants, variablesInitial, variablesLocked, frames, state.iterations);
+        const descentFunc = ({
+            "gradient": gradientDescent,
+            "perparam": perParamDescent,
+            "random": randomDescent,
+        })[state.reversalMethod];
+        const [ cameraX, cameraY, cameraZ, cameraSpeedX, cameraSpeedY, cameraSpeedZ, cameraSpeedW, cameraSpeedF, cameraSpeedR, cameraYaw, cameraPitch, cameraFov, padV, centerX, centerY, ...times ] = reverseProjection(constants, variablesInitial, variablesLocked, frames, descentFunc, state.iterations);
         const offsetX = (centerX - imageWidth / 2);
         const offsetY = (centerY - imageHeight / 2);
         if (!state.cameraXLocked) state.cameraX = cameraX;
@@ -2817,6 +2959,7 @@ window.addEventListener("load", () => {
         padTopLockedInput.checked = state.padTopLocked;
         padBottomLockedInput.checked = state.padBottomLocked;
 
+        reversalMethodSelect.value = state.reversalMethod;
         iterationsInput.value = state.iterations;
 
         if (imageWidth !== null) {

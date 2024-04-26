@@ -10,7 +10,7 @@
         <!-- <div> -->
             <div>
                 <label>Add frame images:</label>
-                <input id="input-images" type="file" multiple>
+                <input id="input-images" type="file" accept="image/*" multiple>
             </div>
             <div>
                 <label>Point:</label>
@@ -121,6 +121,14 @@
             <div>
                 <input id="input-camera-tp-copy" type="button" value="Copy as /tp command">
                 <input id="input-camera-tp-copy-offset" type="button" value="Copy as /tp command with toggled 0.1 offset">
+            </div>
+            <div>
+                <label>Method:</label>
+                <select id="select-reversal-method">
+                    <option value="perparam">Per param step</option>
+                    <option value="gradient">Gradient descent</option>
+                    <option value="random">Random step</option>
+                </select>
             </div>
             <div>
                 <label>Iterations:</label>

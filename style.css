@@ -95,6 +95,10 @@ input[type=number], select {
     background: red;
 } */
 
+#select-reversal-method {
+    width: fit-content;
+}
+
 #textarea-state {
     width: 600px;
     height: 200px;
