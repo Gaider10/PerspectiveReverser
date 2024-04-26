@@ -3269,7 +3269,7 @@ window.addEventListener("load", () => {
             
             context.imageSmoothingEnabled = state.showBlur;
 
-            const [ screenTransform, frameTransform ] = getFrameToCanvasTransform(frameIndex);
+            const [ screenToCanvasTransform, frameToCanvasTransform ] = getFrameToCanvasTransform(frameIndex);
 
             // context.translate(canvas.width / 2, canvas.height / 2);
             // context.scale(zoom, zoom);
@@ -3292,10 +3292,10 @@ window.addEventListener("load", () => {
             // context.translate(-imageWidth / 2, -imageHeight / 2);
             // const frameTransform = context.getTransform();
 
-            context.setTransform(frameTransform);
+            context.setTransform(frameToCanvasTransform);
             context.drawImage(frame.offscreenCanvas, 0, 0, imageWidth, imageHeight);
             
-            context.setTransform(screenTransform);
+            context.setTransform(screenToCanvasTransform);
             
             context.lineWidth = 1 / screenToCanvasZoom;
             context.strokeStyle = "#ccc";
@@ -3311,7 +3311,7 @@ window.addEventListener("load", () => {
             context.lineTo(screenWidth / 2, screenHeight / 2 + 8);
             context.stroke();
 
-            context.setTransform(frameTransform);
+            context.setTransform(frameToCanvasTransform);
 
             if (state.showGrid && screenToCanvasZoom >= 8) {
                 const minX = Math.max(Math.floor(floorPx(screenCanvasCenterX - canvas.width / 2 / screenToCanvasZoom)), 0);
@@ -3338,10 +3338,10 @@ window.addEventListener("load", () => {
             }
             context.setLineDash([]);
             
-            function drawPoint(centerPath, outlinePath, smallOutlinePath, outlineEdgePath, px, py, selected, small) {
+            function drawPoint(centerPath, outlinePath, smallOutlinePath, outlineEdgePath, pointCanvasX, pointCanvasY, selected, small) {
                 centerPath.addPath((() => {
                     const path = new Path2D();
-                    path.arc(px, py, 1 / screenToCanvasZoom, 0, 2 * Math.PI);
+                    path.arc(pointCanvasX, pointCanvasY, 1, 0, 2 * Math.PI);
                     return path;
                 })());
 
@@ -3350,25 +3350,25 @@ window.addEventListener("load", () => {
 
                     (small ? smallOutlinePath : outlinePath).addPath((() => {
                         const path = new Path2D();
-                        path.arc(px, py, (CONFIG.pointInnerRadius + outerRadius) * 0.5 / screenToCanvasZoom, 0, 2 * Math.PI);
+                        path.arc(pointCanvasX, pointCanvasY, (CONFIG.pointInnerRadius + outerRadius) * 0.5, 0, 2 * Math.PI);
                         return path;
                     })());
                     
                     outlineEdgePath.addPath((() => {
                         const path = new Path2D();
-                        path.arc(px, py, (CONFIG.pointInnerRadius + CONFIG.pointEdgeWidth * 0.5) / screenToCanvasZoom, 0, 2 * Math.PI);
+                        path.arc(pointCanvasX, pointCanvasY, CONFIG.pointInnerRadius + CONFIG.pointEdgeWidth * 0.5, 0, 2 * Math.PI);
                         return path;
                     })());
                     
                     outlineEdgePath.addPath((() => {
                         const path = new Path2D();
-                        path.arc(px, py, (outerRadius - CONFIG.pointEdgeWidth * 0.5) / screenToCanvasZoom, 0, 2 * Math.PI);
+                        path.arc(pointCanvasX, pointCanvasY, outerRadius - CONFIG.pointEdgeWidth * 0.5, 0, 2 * Math.PI);
                         return path;
                     })());
                 } else {
                     outlineEdgePath.addPath((() => {
                         const path = new Path2D();
-                        path.arc(px, py, (CONFIG.pointInnerRadius + CONFIG.pointEdgeWidth * 0.5) / screenToCanvasZoom, 0, 2 * Math.PI);
+                        path.arc(pointCanvasX, pointCanvasY, CONFIG.pointInnerRadius + CONFIG.pointEdgeWidth * 0.5, 0, 2 * Math.PI);
                         return path;
                     })());
                 }
@@ -3412,14 +3412,18 @@ window.addEventListener("load", () => {
                 const small = selected && !(state.selectedPoint !== null && state.selectedPoint[0] === frameIndex && state.selectedPoint[1] === pointIndex);
                 
                 const point = state.frames[frameIndex].points[pointIndex];
-                drawPoint(centerPath, outlinePath, smallOutlinePath, outlineEdgePath, point.px, point.py, selected, small);
+                const pointFrameX = point.px;
+                const pointFrameY = point.py;
+                const { x: pointCanvasX, y: pointCanvasY } = frameToCanvasTransform.transformPoint(new DOMPoint(pointFrameX, pointFrameY));
+                drawPoint(centerPath, outlinePath, smallOutlinePath, outlineEdgePath, pointCanvasX, pointCanvasY, selected, small);
 
                 if (state.showProjected) {
                     const constants = projectConstants();
                     const variables = projectVariables();
 
-                    const [ ppx, ppy ] = project(constants, variables, frameIndex, [ point.wx, point.wy, point.wz ]);
-                    drawPoint(projectedCenterPath, projectedOutlinePath, projectedSmallOutlinePath, outlineEdgePath, ppx, ppy, selected, small);
+                    const [ projectedPointFrameX, projectedPointFrameY ] = project(constants, variables, frameIndex, [ point.wx, point.wy, point.wz ]);
+                    const { x: projectedPointCanvasX, y: projectedPointCanvasY } = frameToCanvasTransform.transformPoint(new DOMPoint(projectedPointFrameX, projectedPointFrameY));
+                    drawPoint(projectedCenterPath, projectedOutlinePath, projectedSmallOutlinePath, outlineEdgePath, projectedPointCanvasX, projectedPointCanvasY, selected, small);
                 }
             }
 
@@ -3567,8 +3571,10 @@ window.addEventListener("load", () => {
             context.lineWidth = 1 / screenToCanvasZoom;
             context.strokeStyle = "#f90b";
             context.stroke(selectedLineCenterPath);
+
+            context.resetTransform();
             
-            context.lineWidth = CONFIG.pointEdgeWidth / screenToCanvasZoom;
+            context.lineWidth = CONFIG.pointEdgeWidth;
             context.strokeStyle = "#222b";
             context.stroke(outlineEdgePath);
 
@@ -3576,11 +3582,11 @@ window.addEventListener("load", () => {
                 context.fillStyle = "#00f";
                 context.fill(projectedCenterPath);
 
-                context.lineWidth = (CONFIG.pointOuterRadius - CONFIG.pointInnerRadius - CONFIG.pointEdgeWidth * 2) / screenToCanvasZoom;
+                context.lineWidth = CONFIG.pointOuterRadius - CONFIG.pointInnerRadius - CONFIG.pointEdgeWidth * 2;
                 context.strokeStyle = "#0afb";
                 context.stroke(projectedOutlinePath);
 
-                context.lineWidth = (CONFIG.pointOuterRadius - CONFIG.pointInnerRadius - CONFIG.pointEdgeWidth * 2) * 0.5 / screenToCanvasZoom;
+                context.lineWidth = (CONFIG.pointOuterRadius - CONFIG.pointInnerRadius - CONFIG.pointEdgeWidth * 2) * 0.5;
                 context.strokeStyle = "#0afb";
                 context.stroke(projectedSmallOutlinePath);
             }
@@ -3588,11 +3594,11 @@ window.addEventListener("load", () => {
             context.fillStyle = "#f00";
             context.fill(centerPath);
 
-            context.lineWidth = (CONFIG.pointOuterRadius - CONFIG.pointInnerRadius - CONFIG.pointEdgeWidth * 2) / screenToCanvasZoom;
+            context.lineWidth = CONFIG.pointOuterRadius - CONFIG.pointInnerRadius - CONFIG.pointEdgeWidth * 2;
             context.strokeStyle = "#0f0b";
             context.stroke(outlinePath);
 
-            context.lineWidth = (CONFIG.pointOuterRadius - CONFIG.pointInnerRadius - CONFIG.pointEdgeWidth * 2) * 0.5 / screenToCanvasZoom;
+            context.lineWidth = (CONFIG.pointOuterRadius - CONFIG.pointInnerRadius - CONFIG.pointEdgeWidth * 2) * 0.5;
             context.strokeStyle = "#0f0b";
             context.stroke(smallOutlinePath);
         }
