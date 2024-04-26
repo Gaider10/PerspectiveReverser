@@ -14,7 +14,7 @@ function project(constants, variables, frameIndex, worldPoint) {
     const [ cameraX, cameraY, cameraZ, cameraSpeedX, cameraSpeedY, cameraSpeedZ, cameraSpeedW, cameraSpeedF, cameraSpeedR, cameraYaw, cameraPitch, cameraFov, padV, centerX, centerY, centerSpeedX, centerSpeedY, zoomSpeed, ...times ] = variables;
     const time = times[frameIndex];
 
-    const fullImageSizeY = imageSizeY + padV;
+    const fullImageSizeY = imageSizeY + padV - zoomSpeed * time;
     
     const sinYaw = Math.sin(cameraYaw);
     const cosYaw = Math.cos(cameraYaw);
@@ -46,8 +46,8 @@ function project(constants, variables, frameIndex, worldPoint) {
     const w4 = -z3 + (offsetBy0_1 ? -0.1 : 0);
     
     const w4Inv = w4 === 0 ? 0 : 1 / w4;
-    const x5 = x4 * w4Inv * fullImageSizeY * 0.5 * Math.pow(zoomSpeed, time) + (centerX + centerSpeedX * time);
-    const y5 = y4 * w4Inv * fullImageSizeY * 0.5 * Math.pow(zoomSpeed, time) + (centerY + centerSpeedY * time);
+    const x5 = x4 * w4Inv * fullImageSizeY * 0.5 + (centerX + centerSpeedX * time);
+    const y5 = y4 * w4Inv * fullImageSizeY * 0.5 + (centerY + centerSpeedY * time);
 
     return [ x5, y5 ];
 }
@@ -56,7 +56,7 @@ function projectedError(constants, variables, frames) {
     const [ offsetBy0_1, imageSizeY ] = constants;
     const [ cameraX, cameraY, cameraZ, cameraSpeedX, cameraSpeedY, cameraSpeedZ, cameraSpeedW, cameraSpeedF, cameraSpeedR, cameraYaw, cameraPitch, cameraFov, padV, centerX, centerY, centerSpeedX, centerSpeedY, zoomSpeed, ...times ] = variables;
 
-    const fullImageSizeY = imageSizeY + padV;
+    const fullImageSizeY = imageSizeY + padV - zoomSpeed * time;
     
     const sinYaw = Math.sin(cameraYaw);
     const cosYaw = Math.cos(cameraYaw);
@@ -96,8 +96,8 @@ function projectedError(constants, variables, frames) {
             const w4 = -z3 + (offsetBy0_1 ? -0.1 : 0);
             
             const w4Inv = w4 === 0 ? 0 : 1 / w4;
-            const x5 = x4 * w4Inv * fullImageSizeY * 0.5 * Math.pow(zoomSpeed, time) + (centerX + centerSpeedX * time);
-            const y5 = y4 * w4Inv * fullImageSizeY * 0.5 * Math.pow(zoomSpeed, time) + (centerY + centerSpeedY * time);
+            const x5 = x4 * w4Inv * Math.pow(zoomSpeed, time) + (centerX + centerSpeedX * time);
+            const y5 = y4 * w4Inv * Math.pow(zoomSpeed, time) + (centerY + centerSpeedY * time);
             
             const [ px, py ] = frame[pointIndex][1];
     
@@ -445,7 +445,7 @@ window.addEventListener("load", () => {
         centerSpeedXLocked: true,
         centerSpeedY: 0,
         centerSpeedYLocked: true,
-        zoomSpeed: 1,
+        zoomSpeed: 0,
         zoomSpeedLocked: true,
         reversalMethod: "perparam",
         iterations: 1000,
@@ -539,6 +539,16 @@ window.addEventListener("load", () => {
         state.cameraX += (state.cameraSpeedX - state.cameraSpeedW * sinYaw - state.cameraSpeedF * sinYaw * cosPitch - state.cameraSpeedR * cosYaw) * deltaTime;
         state.cameraY += (state.cameraSpeedY + state.cameraSpeedF * sinPitch) * deltaTime;
         state.cameraZ += (state.cameraSpeedZ + state.cameraSpeedW * cosYaw + state.cameraSpeedF * cosYaw * cosPitch - state.cameraSpeedR * sinYaw) * deltaTime;
+        const centerX = imageWidth / 2 + (state.padRight - state.padLeft) / 2 + state.centerSpeedX * deltaTime;
+        const centerY = imageHeight / 2 + (state.padBottom - state.padTop) / 2 + state.centerSpeedY * deltaTime;
+        const width = (state.padLeft + imageWidth + state.padRight);
+        const height = (state.padTop + imageHeight + state.padBottom);
+        const zoomedWidth = width - state.zoomSpeed * deltaTime * width / height;
+        const zoomedHeight = height - state.zoomSpeed * deltaTime;
+        state.padLeft = 0 - (centerX - zoomedWidth / 2);
+        state.padRight = (centerX + zoomedWidth / 2) - imageWidth;
+        state.padTop = 0 - (centerY - zoomedHeight / 2);
+        state.padBottom = (centerY + zoomedHeight / 2) - imageHeight;
     }
 
     /**
@@ -3151,14 +3161,15 @@ window.addEventListener("load", () => {
             
             
             {
-                const time = state.frames[frameIndex].time - state.frames[state.mainFrameIndex].time;
-                const centerX = imageWidth / 2 + (state.padRight - state.padLeft) / 2 + state.centerSpeedX * time;
-                const centerY = imageHeight / 2 + (state.padBottom - state.padTop) / 2 + state.centerSpeedY * time;
-                const stateZoom = Math.pow(state.zoomSpeed, time);
-                const width = (state.padLeft + imageWidth + state.padRight) / stateZoom;
-                const height = (state.padTop + imageHeight + state.padBottom) / stateZoom;
+                const deltaTime = state.frames[frameIndex].time - state.frames[state.mainFrameIndex].time;
+                const centerX = imageWidth / 2 + (state.padRight - state.padLeft) / 2 + state.centerSpeedX * deltaTime;
+                const centerY = imageHeight / 2 + (state.padBottom - state.padTop) / 2 + state.centerSpeedY * deltaTime;
+                const width = (state.padLeft + imageWidth + state.padRight);
+                const height = (state.padTop + imageHeight + state.padBottom);
+                const zoomedWidth = width - state.zoomSpeed * deltaTime * width / height;
+                const zoomedHeight = height - state.zoomSpeed * deltaTime;
 
-                context.strokeRect(centerX - width / 2 - 0.5 / zoom, centerY - height / 2 - 0.5 / zoom, width + 1 / zoom, height + 1 / zoom);
+                context.strokeRect(centerX - zoomedWidth / 2 - 0.5 / zoom, centerY - zoomedHeight / 2 - 0.5 / zoom, zoomedWidth + 1 / zoom, zoomedHeight + 1 / zoom);
 
                 context.beginPath();
                 context.moveTo(centerX - 8, centerY);
