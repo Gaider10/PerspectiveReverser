@@ -2835,6 +2835,36 @@ window.addEventListener("load", () => {
     });
 
     /**
+     * @type {HTMLInputElement}
+     */
+    const moveRotateInput = document.getElementById("input-rotate-world");
+    moveRotateInput.addEventListener("click", (event) => {
+        const cx = state.moveWorldX + 0.5;
+        const cz = state.moveWorldZ + 0.5;
+
+        function rotatePos(x, z) {
+            const dx = x - cx;
+            const dz = z - cz;
+
+            const newDx = -dz;
+            const newDz = dx;
+
+            return [ cx + newDx, cz + newDz ];
+        }
+
+        for (const frame of state.frames) {
+            for (const point of frame.points) {
+                [ point.wx, point.wz ] = rotatePos(point.wx, point.wz);
+            }
+        }
+        [ state.cameraX, state.cameraZ ] = rotatePos(state.cameraX, state.cameraZ);
+        state.cameraYaw += 90;
+        if (state.cameraYaw > 180) state.cameraYaw -= 360;
+        
+        requestRedraw();
+    });
+
+    /**
      * @type {HTMLTextAreaElement}
      */
     const stateTextarea = document.getElementById("textarea-state");
