@@ -540,8 +540,6 @@ window.addEventListener("load", () => {
             const deltaTime = state.frames[frameIndex].time - state.frames[state.mainFrameIndex].time;
 
             const screenToCanvasTransformBefore = getToCanvasTransforms(frameIndex).screenToCanvasTransform;
-
-            // console.log(`${state.mainFrameIndex} ${frameIndex} ${deltaTime}`);
     
             const sinYaw = Math.sin(state.cameraYaw * (Math.PI / 180));
             const cosYaw = Math.cos(state.cameraYaw * (Math.PI / 180));
@@ -554,31 +552,14 @@ window.addEventListener("load", () => {
     
             const screenMainFrameWidth = imageWidth * state.imageScale;
             const screenMainFrameHeight = imageHeight * state.imageScale;
-            const screenWidth = state.padLeft + screenMainFrameWidth + state.padRight;
-            const screenHeight = state.padTop + screenMainFrameHeight + state.padBottom;
-            // console.log(`screenWidth = ${screenWidth} screenHeight = ${screenHeight}`);
             const frameZoom = (screenMainFrameHeight - state.zoomSpeed * deltaTime) / screenMainFrameHeight;
             const screenFrameWidth = screenMainFrameWidth * frameZoom;
             const screenFrameHeight = screenMainFrameHeight * frameZoom;
-            // console.log(`screenFrameWidth = ${screenFrameWidth} screenFrameHeight = ${screenFrameHeight}`);
-            const screenFrameCenterDx = (state.padLeft - state.padRight) / 2 + state.zoomCenterSpeedX * deltaTime;
-            const screenFrameCenterDy = (state.padTop - state.padBottom) / 2 + state.zoomCenterSpeedY * deltaTime;
-            // console.log(`screenFrameCenterDx = ${screenFrameCenterDx} screenFrameCenterDy = ${screenFrameCenterDy}`);
-            const screenFrameCenterX = screenWidth / 2 + screenFrameCenterDx;
-            const screenFrameCenterY = screenHeight / 2 + screenFrameCenterDy;
-            // console.log(`screenFrameCenterX = ${screenFrameCenterX} screenFrameCenterY = ${screenFrameCenterY}`);
-            const screenFrameMinX = screenFrameCenterX - screenFrameWidth / 2;
-            const screenFrameMaxX = screenFrameCenterX + screenFrameWidth / 2;
-            const screenFrameMinY = screenFrameCenterY - screenFrameHeight / 2;
-            const screenFrameMaxY = screenFrameCenterY + screenFrameHeight / 2;
-            // console.log(`screenFrameMinX = ${screenFrameMinX} screenFrameMaxX = ${screenFrameMaxX} screenFrameMinY = ${screenFrameMinY} screenFrameMaxY = ${screenFrameMaxY}`);
-            state.padLeft = (screenFrameMinX) / frameZoom;
-            state.padRight = (screenWidth - screenFrameMaxX) / frameZoom;
-            state.padTop = (screenFrameMinY) / frameZoom;
-            state.padBottom = (screenHeight - screenFrameMaxY) / frameZoom;
-            state.zoomCenterSpeedX *= 1 / frameZoom;
-            state.zoomCenterSpeedY *= 1 / frameZoom;
-            state.zoomSpeed *= 1 / frameZoom;
+            state.padLeft += (screenMainFrameWidth - screenFrameWidth) / 2 + state.zoomCenterSpeedX * deltaTime;
+            state.padRight += (screenMainFrameWidth - screenFrameWidth) / 2 - state.zoomCenterSpeedX * deltaTime;
+            state.padTop += (screenMainFrameHeight - screenFrameHeight) / 2 + state.zoomCenterSpeedY * deltaTime;
+            state.padBottom += (screenMainFrameHeight - screenFrameHeight) / 2 - state.zoomCenterSpeedY * deltaTime;
+            state.imageScale *= frameZoom;
 
             const screenToCanvasTransformAfter = getToCanvasTransforms(frameIndex).screenToCanvasTransform;
 
