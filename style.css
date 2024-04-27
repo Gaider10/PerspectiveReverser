@@ -2,6 +2,10 @@
     user-select: none;
 }
 
+.selectable {
+    user-select: text;
+}
+
 body {
     width: fit-content;
     margin: auto;

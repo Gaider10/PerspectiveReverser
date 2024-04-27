@@ -2655,6 +2655,8 @@ window.addEventListener("load", () => {
         requestRedraw();
     });
 
+    const screenSizeLabel = document.getElementById("label-screen-size");
+
     /**
      * @type {HTMLInputElement}
      */
@@ -3198,12 +3200,19 @@ window.addEventListener("load", () => {
         iterationsInput.value = state.iterations;
 
         if (imageWidth !== null) {
+            const screenMainFrameWidth = imageWidth * state.imageScale;
+            const screenMainFrameHeight = imageHeight * state.imageScale;
+            const screenWidth = state.padLeft + screenMainFrameWidth + state.padRight;
+            const screenHeight = state.padTop + screenMainFrameHeight + state.padBottom;
+            screenSizeLabel.innerText = `${screenWidth} x ${screenHeight}`;
+
             const constants = projectConstants();
             const variables = projectVariables();
             const frames = projectFrames();
             const error = projectedError(constants, variables, frames);
             errorLabel.innerText = `${error} = ${Math.sqrt(error)}^2`;
         } else {
+            screenSizeLabel.innerText = "";
             errorLabel.innerText = "";
         }
 
