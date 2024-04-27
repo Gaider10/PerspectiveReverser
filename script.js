@@ -10,14 +10,15 @@ const CONFIG = {
 };
 
 function project(constants, variables, frameIndex, worldPoint) {
-    const [ offsetBy0_1, frameWidth, frameHeight ] = constants;
+    const [ offsetBy0_1, imageWidth, imageHeight, imageScale ] = constants;
     const [ cameraX, cameraY, cameraZ, cameraSpeedX, cameraSpeedY, cameraSpeedZ, cameraSpeedW, cameraSpeedF, cameraSpeedR, cameraYaw, cameraPitch, cameraFov, padV, screenMainFrameCenterDx, screenMainFrameCenterDy, screenFrameCenterSpeedX, screenFrameCenterSpeedY, screenZoomSpeed, ...times ] = variables;
     const time = times[frameIndex];
 
-    const screenHeight = frameHeight + padV;
+    const screenMainFrameHeight = imageHeight * imageScale;
+    const screenHeight = screenMainFrameHeight + padV;
     const screenFrameCenterDx = screenMainFrameCenterDx + screenFrameCenterSpeedX * time;
     const screenFrameCenterDy = screenMainFrameCenterDy + screenFrameCenterSpeedY * time;
-    const screenToFrameZoom = frameHeight / (frameHeight - screenZoomSpeed * time);
+    const imageToScreenZoom = (screenMainFrameHeight - screenZoomSpeed * time) / screenMainFrameHeight * imageScale;
 
     const sinYaw = Math.sin(cameraYaw);
     const cosYaw = Math.cos(cameraYaw);
@@ -49,17 +50,18 @@ function project(constants, variables, frameIndex, worldPoint) {
     const w4 = -z3 + (offsetBy0_1 ? -0.1 : 0);
     
     const w4Inv = w4 === 0 ? 0 : 1 / w4;
-    const x5 = (x4 * w4Inv * screenHeight * 0.5 - screenFrameCenterDx) * screenToFrameZoom + frameWidth / 2;
-    const y5 = (y4 * w4Inv * screenHeight * 0.5 - screenFrameCenterDy) * screenToFrameZoom + frameHeight / 2;
+    const x5 = (x4 * w4Inv * screenHeight * 0.5 - screenFrameCenterDx) / imageToScreenZoom + imageWidth / 2;
+    const y5 = (y4 * w4Inv * screenHeight * 0.5 - screenFrameCenterDy) / imageToScreenZoom + imageHeight / 2;
 
     return [ x5, y5 ];
 }
 
 function projectedError(constants, variables, frames) {
-    const [ offsetBy0_1, frameWidth, frameHeight ] = constants;
+    const [ offsetBy0_1, imageWidth, imageHeight, imageScale ] = constants;
     const [ cameraX, cameraY, cameraZ, cameraSpeedX, cameraSpeedY, cameraSpeedZ, cameraSpeedW, cameraSpeedF, cameraSpeedR, cameraYaw, cameraPitch, cameraFov, padV, screenMainFrameCenterDx, screenMainFrameCenterDy, screenFrameCenterSpeedX, screenFrameCenterSpeedY, screenZoomSpeed, ...times ] = variables;
 
-    const screenHeight = frameHeight + padV;
+    const screenMainFrameHeight = imageHeight * imageScale;
+    const screenHeight = screenMainFrameHeight + padV;
 
     const sinYaw = Math.sin(cameraYaw);
     const cosYaw = Math.cos(cameraYaw);
@@ -77,7 +79,7 @@ function projectedError(constants, variables, frames) {
 
         const screenFrameCenterDx = screenMainFrameCenterDx + screenFrameCenterSpeedX * time;
         const screenFrameCenterDy = screenMainFrameCenterDy + screenFrameCenterSpeedY * time;
-        const screenToFrameZoom = frameHeight / (frameHeight - screenZoomSpeed * time);
+        const imageToScreenZoom = (screenMainFrameHeight - screenZoomSpeed * time) / screenMainFrameHeight * imageScale;
 
         for (let pointIndex = 0; pointIndex < frames[frameIndex].length; pointIndex++) {
             const [ x0, y0, z0 ] = frame[pointIndex][0];
@@ -103,8 +105,8 @@ function projectedError(constants, variables, frames) {
             const w4 = -z3 + (offsetBy0_1 ? -0.1 : 0);
             
             const w4Inv = w4 === 0 ? 0 : 1 / w4;
-            const x5 = (x4 * w4Inv * screenHeight * 0.5 - screenFrameCenterDx) * screenToFrameZoom + frameWidth / 2;
-            const y5 = (y4 * w4Inv * screenHeight * 0.5 - screenFrameCenterDy) * screenToFrameZoom + frameHeight / 2;
+            const x5 = (x4 * w4Inv * screenHeight * 0.5 - screenFrameCenterDx) / imageToScreenZoom + imageWidth / 2;
+            const y5 = (y4 * w4Inv * screenHeight * 0.5 - screenFrameCenterDy) / imageToScreenZoom + imageHeight / 2;
             
             const [ px, py ] = frame[pointIndex][1];
     
@@ -382,6 +384,7 @@ window.addEventListener("load", () => {
      *     cameraPitchLocked: boolean,
      *     cameraFov: number,
      *     cameraFovLocked: boolean,
+     *     imageScale: number,
      *     padLeft: number,
      *     padLeftLocked: boolean,
      *     padRight: number,
@@ -441,6 +444,7 @@ window.addEventListener("load", () => {
         cameraPitchLocked: false,
         cameraFov: 70,
         cameraFovLocked: false,
+        imageScale: 1,
         padLeft: 0,
         padLeftLocked: true,
         padRight: 0,
@@ -491,8 +495,8 @@ window.addEventListener("load", () => {
     const canvasClientWidth = 600;
     const canvasClientHeight = 400;
 
-    let frameWidth = null;
-    let frameHeight = null;
+    let imageWidth = null;
+    let imageHeight = null;
 
     /**
      * 
@@ -535,7 +539,7 @@ window.addEventListener("load", () => {
         if (frameIndex !== null && state.mainFrameIndex !== null) {
             const deltaTime = state.frames[frameIndex].time - state.frames[state.mainFrameIndex].time;
 
-            const screenToCanvasTransformBefore = getFrameToCanvasTransform(frameIndex)[0];
+            const screenToCanvasTransformBefore = getToCanvasTransforms(frameIndex).screenToCanvasTransform;
 
             // console.log(`${state.mainFrameIndex} ${frameIndex} ${deltaTime}`);
     
@@ -548,12 +552,14 @@ window.addEventListener("load", () => {
             state.cameraY += (state.cameraSpeedY + state.cameraSpeedF * sinPitch) * deltaTime;
             state.cameraZ += (state.cameraSpeedZ + state.cameraSpeedW * cosYaw + state.cameraSpeedF * cosYaw * cosPitch - state.cameraSpeedR * sinYaw) * deltaTime;
     
-            const screenWidth = state.padLeft + frameWidth + state.padRight;
-            const screenHeight = state.padTop + frameHeight + state.padBottom;
+            const screenMainFrameWidth = imageWidth * state.imageScale;
+            const screenMainFrameHeight = imageHeight * state.imageScale;
+            const screenWidth = state.padLeft + screenMainFrameWidth + state.padRight;
+            const screenHeight = state.padTop + screenMainFrameHeight + state.padBottom;
             // console.log(`screenWidth = ${screenWidth} screenHeight = ${screenHeight}`);
-            const frameToScreenZoom = (frameHeight - state.zoomSpeed * deltaTime) / frameHeight;
-            const screenFrameWidth = frameWidth * frameToScreenZoom;
-            const screenFrameHeight = frameHeight * frameToScreenZoom;
+            const frameZoom = (screenMainFrameHeight - state.zoomSpeed * deltaTime) / screenMainFrameHeight;
+            const screenFrameWidth = screenMainFrameWidth * frameZoom;
+            const screenFrameHeight = screenMainFrameHeight * frameZoom;
             // console.log(`screenFrameWidth = ${screenFrameWidth} screenFrameHeight = ${screenFrameHeight}`);
             const screenFrameCenterDx = (state.padLeft - state.padRight) / 2 + state.zoomCenterSpeedX * deltaTime;
             const screenFrameCenterDy = (state.padTop - state.padBottom) / 2 + state.zoomCenterSpeedY * deltaTime;
@@ -566,15 +572,15 @@ window.addEventListener("load", () => {
             const screenFrameMinY = screenFrameCenterY - screenFrameHeight / 2;
             const screenFrameMaxY = screenFrameCenterY + screenFrameHeight / 2;
             // console.log(`screenFrameMinX = ${screenFrameMinX} screenFrameMaxX = ${screenFrameMaxX} screenFrameMinY = ${screenFrameMinY} screenFrameMaxY = ${screenFrameMaxY}`);
-            state.padLeft = (screenFrameMinX) / frameToScreenZoom;
-            state.padRight = (screenWidth - screenFrameMaxX) / frameToScreenZoom;
-            state.padTop = (screenFrameMinY) / frameToScreenZoom;
-            state.padBottom = (screenHeight - screenFrameMaxY) / frameToScreenZoom;
-            state.zoomCenterSpeedX *= 1 / frameToScreenZoom;
-            state.zoomCenterSpeedY *= 1 / frameToScreenZoom;
-            state.zoomSpeed *= 1 / frameToScreenZoom;
+            state.padLeft = (screenFrameMinX) / frameZoom;
+            state.padRight = (screenWidth - screenFrameMaxX) / frameZoom;
+            state.padTop = (screenFrameMinY) / frameZoom;
+            state.padBottom = (screenHeight - screenFrameMaxY) / frameZoom;
+            state.zoomCenterSpeedX *= 1 / frameZoom;
+            state.zoomCenterSpeedY *= 1 / frameZoom;
+            state.zoomSpeed *= 1 / frameZoom;
 
-            const screenToCanvasTransformAfter = getFrameToCanvasTransform(frameIndex)[0];
+            const screenToCanvasTransformAfter = getToCanvasTransforms(frameIndex).screenToCanvasTransform;
 
             const { x: canvasScreenXBefore, y: canvasScreenYBefore } = screenToCanvasTransformBefore.transformPoint(new DOMPoint(0, 0));
             const { x: canvasScreenXAfter, y: canvasScreenYAfter } = screenToCanvasTransformAfter.transformPoint(new DOMPoint(0, 0))
@@ -780,8 +786,8 @@ window.addEventListener("load", () => {
             
             const frameIndex = frames.indexOf(frame);
 
-            const canvasToFrameTransform = getFrameToCanvasTransform(frameIndex)[1].invertSelf();
-            const { x: mouseFrameX, y: mouseFrameY } = canvasToFrameTransform.transformPoint(new DOMPoint(mouseCanvasX, mouseCanvasY));
+            // const canvasToFrameTransform = getFrameToCanvasTransform(frameIndex)[1].invertSelf();
+            // const { x: mouseFrameX, y: mouseFrameY } = canvasToFrameTransform.transformPoint(new DOMPoint(mouseCanvasX, mouseCanvasY));
             // console.log(`mouseFramePos: ${mouseFrameX} ${mouseFrameY}`);
 
             if (!event.shiftKey && Date.now() - doubleClickStartTime <= CONFIG.doubleClickDelay && prevMouseUpCanvasPos !== null) {
@@ -803,7 +809,7 @@ window.addEventListener("load", () => {
                     // console.log(`doubleclick`);
 
                     if (selectLine(null)) {
-                        const canvasToFrameTransform = getFrameToCanvasTransform(frameIndex)[1].invertSelf();
+                        const canvasToFrameTransform = getToCanvasTransforms(frameIndex).frameToCanvasTransform.invertSelf();
                         const { x: mouseFrameX, y: mouseFrameY } = canvasToFrameTransform.transformPoint(new DOMPoint(mouseCanvasX, mouseCanvasY));
                         // console.log(`mouseFramePos: ${mouseFrameX} ${mouseFrameY}`);
                         const roundedMouseFrameX = roundTo(roundTo(mouseFrameX, 1 / canvasToFrameTransform.m11), 1000);
@@ -834,7 +840,7 @@ window.addEventListener("load", () => {
 
                 // console.log(`pointFramePos: ${pointFrameX} ${pointFrameY}`);
 
-                const frameToCanvasTransform = getFrameToCanvasTransform(frameIndex)[1];
+                const frameToCanvasTransform = getToCanvasTransforms(frameIndex).frameToCanvasTransform;
                 const { x: pointCanvasX, y: pointCanvasY } = frameToCanvasTransform.transformPoint(new DOMPoint(pointFrameX, pointFrameY));
 
                 // console.log(`pointCanvasPos: ${pointCanvasX} ${pointCanvasY}`);
@@ -887,7 +893,7 @@ window.addEventListener("load", () => {
 
                     // console.log(`pointFramePos: ${pointFrameX} ${pointFrameY}`);
 
-                    const frameToCanvasTransform = getFrameToCanvasTransform(frameIndex)[1];
+                    const frameToCanvasTransform = getToCanvasTransforms(frameIndex).frameToCanvasTransform;
                     const { x: pointCanvasX, y: pointCanvasY } = frameToCanvasTransform.transformPoint(new DOMPoint(pointFrameX, pointFrameY));
 
                     // console.log(`pointCanvasPos: ${pointCanvasX} ${pointCanvasY}`);
@@ -926,7 +932,7 @@ window.addEventListener("load", () => {
                         }
                     }
                 } else {
-                    const canvasToFrameTransform = getFrameToCanvasTransform(frameIndex)[1].invertSelf();
+                    const canvasToFrameTransform = getToCanvasTransforms(frameIndex).frameToCanvasTransform.invertSelf();
                     const { x: mouseFrameX, y: mouseFrameY } = canvasToFrameTransform.transformPoint(new DOMPoint(mouseCanvasX, mouseCanvasY));
 
                     let minLineDist = Number.MAX_VALUE;
@@ -1002,7 +1008,7 @@ window.addEventListener("load", () => {
                 const mouseCanvasDy = mouseCanvasY - prevMouseDownCanvasPos.y;
 
                 const frameIndex = frames.indexOf(frame);
-                const [ screenToCanvasTransform, frameToCanvasTransform ] = getFrameToCanvasTransform(frameIndex);
+                const { screenToCanvasTransform, frameToCanvasTransform } = getToCanvasTransforms(frameIndex);
 
                 if (draggedPointIndex !== null) {
                     const newPointCanvasX = mouseCanvasX + draggedPointCanvasOffsetX;
@@ -1041,7 +1047,7 @@ window.addEventListener("load", () => {
             const mouseCanvasY = event.offsetY;
 
             const frameIndex = frames.indexOf(frame);
-            const [ screenToCanvasTransform, frameToCanvasTransform ] = getFrameToCanvasTransform(frameIndex);
+            const { screenToCanvasTransform, frameToCanvasTransform } = getToCanvasTransforms(frameIndex);
 
             const screenToCanvasZoom = screenToCanvasTransform.m11;
 
@@ -1092,7 +1098,7 @@ window.addEventListener("load", () => {
         
                             const point = state.frames[state.selectedPoint[0]].points[state.selectedPoint[1]];
 
-                            const canvasToFrameTransform = getFrameToCanvasTransform(frameIndex)[1].invertSelf();
+                            const canvasToFrameTransform = getToCanvasTransforms(frameIndex).frameToCanvasTransform.invertSelf();
         
                             const newPointFrameX = roundTo(roundTo(point.px + dsx * canvasToFrameTransform.m11, 1 / canvasToFrameTransform.m11), 1000);
                             const newPointFrameY = roundTo(roundTo(point.py + dsy * canvasToFrameTransform.m22, 1 / canvasToFrameTransform.m22), 1000);
@@ -1192,23 +1198,23 @@ window.addEventListener("load", () => {
         
         state.frames[frameIndex].name = name;
 
-        const prevImageWidth = frameWidth;
-        const prevImageHeight = frameHeight;
+        const prevImageWidth = imageWidth;
+        const prevImageHeight = imageHeight;
 
-        frameWidth = null;
-        frameHeight = null;
+        imageWidth = null;
+        imageHeight = null;
         for (let i = 0; i < frames.length; i++) {
             if (frames[i].image !== null) {
-                frameWidth = frames[i].image.width;
-                frameHeight = frames[i].image.height;
+                imageWidth = frames[i].image.width;
+                imageHeight = frames[i].image.height;
                 break;
             }
         }
 
-        if (frameWidth !== null && (prevImageWidth !== frameWidth || prevImageHeight !== frameHeight)) {
+        if (imageWidth !== null && (prevImageWidth !== imageWidth || prevImageHeight !== imageHeight)) {
             screenCanvasCenterDx = 0;
             screenCanvasCenterDy = 0;
-            zoomIndex = Math.min(Math.max(-Math.ceil(Math.log2(Math.max(frameWidth / canvasClientWidth, frameHeight / canvasClientHeight)) * 2) / 2, CONFIG.zoomIndexMin), CONFIG.zoomIndexMax);
+            zoomIndex = Math.min(Math.max(-Math.ceil(Math.log2(Math.max(imageWidth / canvasClientWidth, imageHeight / canvasClientHeight)) * 2) / 2, CONFIG.zoomIndexMin), CONFIG.zoomIndexMax);
             screenToCanvasZoomMult = Math.pow(2, zoomIndex);
         }
 
@@ -1224,12 +1230,12 @@ window.addEventListener("load", () => {
 
         if (frame.image === null) return;
 
-        frame.offscreenCanvas.width = frameWidth;
-        frame.offscreenCanvas.height = frameHeight;
+        frame.offscreenCanvas.width = frame.image.width;
+        frame.offscreenCanvas.height = frame.image.height;
         frame.offscreenContext.drawImage(frame.image, 0, 0);
-        const imageData = frame.offscreenContext.getImageData(0, 0, frameWidth, frameHeight);
+        const imageData = frame.offscreenContext.getImageData(0, 0, frame.offscreenCanvas.width, frame.offscreenCanvas.height);
         if (state.brightness !== 1) {
-            for (let i = 0; i < frameWidth * frameHeight; i++) {
+            for (let i = 0; i < imageData.width * imageData.height; i++) {
                 for (let j = 0; j < 3; j++) {
                     imageData.data[i * 4 + j] = Math.min(imageData.data[i * 4 + j] * state.brightness, 255);
                 }
@@ -2562,6 +2568,17 @@ window.addEventListener("load", () => {
 
         requestRedraw();
     });
+    
+    /**
+     * @type {HTMLInputElement}
+     */
+    const imageScaleInput = document.getElementById("input-image-scale");
+
+    initCoordsInputs([ imageScaleInput ], (values) => {
+        [ state.imageScale ] = values;
+
+        requestRedraw();
+    });
 
     /**
      * @type {HTMLInputElement}
@@ -2746,7 +2763,7 @@ window.addEventListener("load", () => {
      */
     const reverseInput = document.getElementById("input-reverse");
     reverseInput.addEventListener("click", (event) => {
-        if (frameWidth === null) return;
+        if (imageWidth === null) return;
 
         const constants = projectConstants();
         const variablesInitial = projectVariables();
@@ -3158,6 +3175,8 @@ window.addEventListener("load", () => {
         cameraRotPitchLockedInput.checked = state.cameraPitchLocked;
         cameraFovLockedInput.checked = state.cameraFovLocked;
 
+        imageScaleInput.value = state.imageScale;
+
         padLeftInput.value = state.padLeft;
         padRightInput.value = state.padRight;
         padTopInput.value = state.padTop;
@@ -3178,7 +3197,7 @@ window.addEventListener("load", () => {
         reversalMethodSelect.value = state.reversalMethod;
         iterationsInput.value = state.iterations;
 
-        if (frameWidth !== null) {
+        if (imageWidth !== null) {
             const constants = projectConstants();
             const variables = projectVariables();
             const frames = projectFrames();
@@ -3205,8 +3224,9 @@ window.addEventListener("load", () => {
     function projectConstants() {
         return [
             state.offsetBy01, // offsetBy0_1
-            frameWidth, // frameWidth
-            frameHeight, // frameHeight
+            imageWidth, // imageWidth
+            imageHeight, // imageHeight
+            state.imageScale, // imageScale
         ];
     }
 
@@ -3265,13 +3285,15 @@ window.addEventListener("load", () => {
     /**
      * 
      * @param {number} frameIndex 
-     * @returns {[ screenToCanvasTransform: DOMMatrix, frameToCanvasTransform: DOMMatrix ]}
+     * @returns {{ screenToCanvasTransform: DOMMatrix, frameToCanvasTransform: DOMMatrix }}
      */
-    function getFrameToCanvasTransform(frameIndex) {
+    function getToCanvasTransforms(frameIndex) {
         const transform = new DOMMatrix([ 1, 0, 0, 1, 0, 0 ]);
 
-        const screenWidth = state.padLeft + frameWidth + state.padRight;
-        const screenHeight = state.padTop + frameHeight + state.padBottom;
+        const screenMainFrameWidth = imageWidth * state.imageScale;
+        const screenMainFrameHeight = imageHeight * state.imageScale;
+        const screenWidth = state.padLeft + screenMainFrameWidth + state.padRight;
+        const screenHeight = state.padTop + screenMainFrameHeight + state.padBottom;
         const screenCanvasCenterX = screenWidth / 2 + screenCanvasCenterDx;
         const screenCanvasCenterY = screenHeight / 2 + screenCanvasCenterDy;
 
@@ -3284,19 +3306,20 @@ window.addEventListener("load", () => {
         transform.translateSelf(-screenCanvasCenterX, -screenCanvasCenterY);
         
         const deltaTime = state.frames[frameIndex].time - state.frames[state.mainFrameIndex].time;
-        const screenMainFrameCenterX = state.padLeft + frameWidth / 2;
-        const screenMainFrameCenterY = state.padTop + frameHeight / 2;
+        const screenMainFrameCenterX = state.padLeft + screenMainFrameWidth / 2;
+        const screenMainFrameCenterY = state.padTop + screenMainFrameHeight / 2;
         const screenFrameCenterX = screenMainFrameCenterX + state.zoomCenterSpeedX * deltaTime;
         const screenFrameCenterY = screenMainFrameCenterY + state.zoomCenterSpeedY * deltaTime;
-        const frameToScreenZoom = (frameHeight - state.zoomSpeed * deltaTime) / frameHeight;
+        const frameZoom = (screenMainFrameHeight - state.zoomSpeed * deltaTime) / screenMainFrameHeight;
         
         const screenToCanvasTransform = DOMMatrix.fromMatrix(transform);
         
         transform.translateSelf(screenFrameCenterX, screenFrameCenterY);
-        transform.scaleSelf(frameToScreenZoom, frameToScreenZoom);
-        transform.translateSelf(-frameWidth / 2, -frameHeight / 2);
+        transform.scaleSelf(frameZoom, frameZoom);
+        transform.translateSelf(-screenMainFrameWidth / 2, -screenMainFrameHeight / 2);
+        transform.scaleSelf(state.imageScale, state.imageScale);
 
-        return [ screenToCanvasTransform, transform ];
+        return { screenToCanvasTransform, frameToCanvasTransform: transform };
     }
 
     function redraw() {
@@ -3328,21 +3351,23 @@ window.addEventListener("load", () => {
             
             context.imageSmoothingEnabled = state.showBlur;
 
-            const [ screenToCanvasTransform, frameToCanvasTransform ] = getFrameToCanvasTransform(frameIndex);
+            const { screenToCanvasTransform, frameToCanvasTransform } = getToCanvasTransforms(frameIndex);
             const screenToCanvasZoom = screenToCanvasTransform.m11;
             const frameToCanvasZoom = frameToCanvasTransform.m11;
 
             context.setTransform(frameToCanvasTransform);
 
-            context.drawImage(frame.offscreenCanvas, 0, 0, frameWidth, frameHeight);
+            context.drawImage(frame.offscreenCanvas, 0, 0, imageWidth, imageHeight);
             
             context.setTransform(screenToCanvasTransform);
             
             context.lineWidth = 1 / screenToCanvasZoom;
             context.strokeStyle = "#ccc";
             
-            const screenWidth = (state.padLeft + frameWidth + state.padRight);
-            const screenHeight = (state.padTop + frameHeight + state.padBottom);
+            const screenMainFrameWidth = imageWidth * state.imageScale;
+            const screenMainFrameHeight = imageHeight * state.imageScale;
+            const screenWidth = (state.padLeft + screenMainFrameWidth + state.padRight);
+            const screenHeight = (state.padTop + screenMainFrameHeight + state.padBottom);
             context.strokeRect(-0.5 / screenToCanvasZoom, -0.5 / screenToCanvasZoom, screenWidth + 1 / screenToCanvasZoom, screenHeight + 1 / screenToCanvasZoom);
 
             context.beginPath();
@@ -3361,8 +3386,8 @@ window.addEventListener("load", () => {
                 const { x: frameCanvasMaxX, y: frameCanvasMaxY } = canvasToFrameTransform.transformPoint(new DOMPoint(canvas.width, canvas.height));
                 const clampedFrameCanvasMinX = Math.max(Math.floor(Math.min(frameCanvasMinX, frameCanvasMaxX)), 0);
                 const clampedFrameCanvasMinY = Math.max(Math.floor(Math.min(frameCanvasMinY, frameCanvasMaxY)), 0);
-                const clampedFrameCanvasMaxX = Math.min(Math.ceil(Math.max(frameCanvasMinX, frameCanvasMaxX)), frameWidth);
-                const clampedFrameCanvasMaxY = Math.min(Math.ceil(Math.max(frameCanvasMinY, frameCanvasMaxY)), frameHeight);
+                const clampedFrameCanvasMaxX = Math.min(Math.ceil(Math.max(frameCanvasMinX, frameCanvasMaxX)), imageWidth);
+                const clampedFrameCanvasMaxY = Math.min(Math.ceil(Math.max(frameCanvasMinY, frameCanvasMaxY)), imageHeight);
 
                 context.beginPath();
 
@@ -3520,23 +3545,23 @@ window.addEventListener("load", () => {
                     let x1, y1, x2, y2;
 
                     // line is mostly horizontal
-                    if (a * a < frameWidth / frameHeight) {
+                    if (a * a < imageWidth / imageHeight) {
                         x1 = 0;
                         y1 = -(a * x1 + c) / b;
                         if (y1 < 0) {
                             y1 = 0;
                             x1 = -(b * y1 + c) / a;
-                        } else if (y1 > frameHeight) {
-                            y1 = frameHeight;
+                        } else if (y1 > imageHeight) {
+                            y1 = imageHeight;
                             x1 = -(b * y1 + c) / a;
                         }
-                        x2 = frameWidth;
+                        x2 = imageWidth;
                         y2 = -(a * x2 + c) / b;
                         if (y2 < 0) {
                             y2 = 0;
                             x2 = -(b * y2 + c) / a;
-                        } else if (y2 > frameHeight) {
-                            y2 = frameHeight;
+                        } else if (y2 > imageHeight) {
+                            y2 = imageHeight;
                             x2 = -(b * y2 + c) / a;
                         }
                     } else {
@@ -3545,17 +3570,17 @@ window.addEventListener("load", () => {
                         if (x1 < 0) {
                             x1 = 0;
                             y1 = -(a * x1 + c) / b;
-                        } else if (x1 > frameWidth) {
-                            x1 = frameWidth;
+                        } else if (x1 > imageWidth) {
+                            x1 = imageWidth;
                             y1 = -(a * x1 + c) / b;
                         }
-                        y2 = frameHeight;
+                        y2 = imageHeight;
                         x2 = -(b * y2 + c) / a;
                         if (x2 < 0) {
                             x2 = 0;
                             y2 = -(a * x2 + c) / b;
-                        } else if (x2 > frameWidth) {
-                            x2 = frameWidth;
+                        } else if (x2 > imageWidth) {
+                            x2 = imageWidth;
                             y2 = -(a * x2 + c) / b;
                         }
                     }
