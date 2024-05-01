@@ -10,7 +10,7 @@ const CONFIG = {
 };
 
 function project(constants, variables, frameIndex, worldPoint) {
-    const [ offsetBy0_1, imageWidth, imageHeight ] = constants;
+    const [ offsetBy0_1, imageWidth, imageHeight, cameraYawSpeed, cameraPitchSpeed ] = constants;
     const [ cameraX, cameraY, cameraZ, cameraSpeedX, cameraSpeedY, cameraSpeedZ, cameraSpeedW, cameraSpeedF, cameraSpeedR, cameraYaw, cameraPitch, cameraFov, imageScale, screenHeight, screenMainFrameCenterDx, screenMainFrameCenterDy, screenFrameCenterSpeedX, screenFrameCenterSpeedY, screenZoomSpeed, ...times ] = variables;
     const time = times[frameIndex];
 
@@ -19,10 +19,10 @@ function project(constants, variables, frameIndex, worldPoint) {
     const screenFrameCenterDy = screenMainFrameCenterDy + screenFrameCenterSpeedY * time;
     const imageToScreenZoom = (screenMainFrameHeight - screenZoomSpeed * time) / screenMainFrameHeight * imageScale;
 
-    const sinYaw = Math.sin(cameraYaw);
-    const cosYaw = Math.cos(cameraYaw);
-    const sinPitch = Math.sin(-cameraPitch);
-    const cosPitch = Math.cos(-cameraPitch);
+    const sinYaw = Math.sin(cameraYaw + cameraYawSpeed * time);
+    const cosYaw = Math.cos(cameraYaw + cameraYawSpeed * time);
+    const sinPitch = Math.sin(-(cameraPitch + cameraPitchSpeed * time));
+    const cosPitch = Math.cos(-(cameraPitch + cameraPitchSpeed * time));
 
     const f = 1 / Math.tan(cameraFov * 0.5);
 
@@ -56,15 +56,10 @@ function project(constants, variables, frameIndex, worldPoint) {
 }
 
 function projectedError(constants, variables, frames) {
-    const [ offsetBy0_1, imageWidth, imageHeight ] = constants;
+    const [ offsetBy0_1, imageWidth, imageHeight, cameraYawSpeed, cameraPitchSpeed ] = constants;
     const [ cameraX, cameraY, cameraZ, cameraSpeedX, cameraSpeedY, cameraSpeedZ, cameraSpeedW, cameraSpeedF, cameraSpeedR, cameraYaw, cameraPitch, cameraFov, imageScale, screenHeight, screenMainFrameCenterDx, screenMainFrameCenterDy, screenFrameCenterSpeedX, screenFrameCenterSpeedY, screenZoomSpeed, ...times ] = variables;
 
     const screenMainFrameHeight = imageHeight * imageScale;
-
-    const sinYaw = Math.sin(cameraYaw);
-    const cosYaw = Math.cos(cameraYaw);
-    const sinPitch = Math.sin(-cameraPitch);
-    const cosPitch = Math.cos(-cameraPitch);
 
     const f = 1 / Math.tan(cameraFov * 0.5);
 
@@ -74,6 +69,11 @@ function projectedError(constants, variables, frames) {
     for (let frameIndex = 0; frameIndex < frames.length; frameIndex++) {
         const frame = frames[frameIndex];
         const time = times[frameIndex];
+
+        const sinYaw = Math.sin(cameraYaw + cameraYawSpeed * time);
+        const cosYaw = Math.cos(cameraYaw + cameraYawSpeed * time);
+        const sinPitch = Math.sin(-(cameraPitch + cameraPitchSpeed * time));
+        const cosPitch = Math.cos(-(cameraPitch + cameraPitchSpeed * time));
 
         const screenFrameCenterDx = screenMainFrameCenterDx + screenFrameCenterSpeedX * time;
         const screenFrameCenterDy = screenMainFrameCenterDy + screenFrameCenterSpeedY * time;
@@ -380,6 +380,8 @@ window.addEventListener("load", () => {
      *     cameraYawLocked: boolean,
      *     cameraPitch: number,
      *     cameraPitchLocked: boolean,
+     *     cameraYawSpeed: number,
+     *     cameraPitchSpeed: number,
      *     cameraFov: number,
      *     cameraFovLocked: boolean,
      *     imageScale: number,
@@ -443,6 +445,8 @@ window.addEventListener("load", () => {
         cameraYawLocked: false,
         cameraPitch: 0,
         cameraPitchLocked: false,
+        cameraYawSpeed: 0,
+        cameraPitchSpeed: 0,
         cameraFov: 70,
         cameraFovLocked: false,
         imageScale: 1,
@@ -2528,6 +2532,21 @@ window.addEventListener("load", () => {
     /**
      * @type {HTMLInputElement}
      */
+    const cameraRotSpeedYawInput = document.getElementById("input-camera-rot-speed-yaw");
+    /**
+     * @type {HTMLInputElement}
+     */
+    const cameraRotSpeedPitchInput = document.getElementById("input-camera-rot-speed-pitch");
+
+    initCoordsInputs([ cameraRotSpeedYawInput, cameraRotSpeedPitchInput ], (values) => {
+        [ state.cameraYawSpeed, state.cameraPitchSpeed ] = values;
+
+        requestRedraw();
+    });
+
+    /**
+     * @type {HTMLInputElement}
+     */
     const cameraRotCopyInput = document.getElementById("input-camera-rot-copy");
     cameraRotCopyInput.addEventListener("click", (event) => {
         navigator.clipboard.writeText(`${state.cameraYaw} ${state.cameraPitch}`);
@@ -3250,6 +3269,9 @@ window.addEventListener("load", () => {
         cameraRotPitchInput.value = state.cameraPitch;
         cameraFovInput.value = state.cameraFov;
 
+        cameraRotSpeedYawInput.value = state.cameraYawSpeed;
+        cameraRotSpeedPitchInput.value = state.cameraPitchSpeed;
+
         cameraPosXLockedInput.checked = state.cameraXLocked;
         cameraPosYLockedInput.checked = state.cameraYLocked;
         cameraPosZLockedInput.checked = state.cameraZLocked;
@@ -3328,6 +3350,8 @@ window.addEventListener("load", () => {
             state.offsetBy01, // offsetBy0_1
             imageWidth, // imageWidth
             imageHeight, // imageHeight
+            state.cameraYawSpeed * (Math.PI / 180), // cameraYawSpeed
+            state.cameraPitchSpeed * (Math.PI / 180), // cameraPitchSpeed
         ];
     }
 
