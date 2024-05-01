@@ -557,6 +557,9 @@ window.addEventListener("load", () => {
             state.cameraX += (state.cameraSpeedX - state.cameraSpeedW * sinYaw - state.cameraSpeedF * sinYaw * cosPitch - state.cameraSpeedR * cosYaw) * deltaTime;
             state.cameraY += (state.cameraSpeedY + state.cameraSpeedF * sinPitch) * deltaTime;
             state.cameraZ += (state.cameraSpeedZ + state.cameraSpeedW * cosYaw + state.cameraSpeedF * cosYaw * cosPitch - state.cameraSpeedR * sinYaw) * deltaTime;
+
+            state.cameraYaw += state.cameraYawSpeed * deltaTime;
+            state.cameraPitch += state.cameraPitchSpeed * deltaTime;
     
             const screenMainFrameWidth = imageWidth * state.imageScale;
             const screenMainFrameHeight = imageHeight * state.imageScale;
