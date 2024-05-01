@@ -914,7 +914,7 @@ window.addEventListener("load", () => {
                             selectLine(frameIndex, createLine(frameIndex));
                         }
                         
-                        toggleLinePoint(frameIndex, state.selectedLine, clickedPointIndex);
+                        toggleLinePoint(frameIndex, state.selectedLine[1], clickedPointIndex);
                     } else {
                         if (selectLine(null)) {
                             selectPoint(frameIndex, clickedPointIndex);
