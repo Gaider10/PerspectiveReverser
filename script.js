@@ -386,17 +386,17 @@ window.addEventListener("load", () => {
      *     cameraFovLocked: boolean,
      *     imageScale: number,
      *     imageScaleLocked: boolean,
-     *     padLeft: number,
-     *     padLeftLocked: boolean,
-     *     padRight: number,
-     *     padRightLocked: boolean,
-     *     padTop: number,
-     *     padBottom: number,
-     *     padTopBottomLocked: boolean,
-     *     frameCenterDxLocked: boolean,
-     *     frameCenterDyLocked: boolean,
+     *     screenWidth: number,
      *     screenWidthLocked: boolean,
+     *     screenHeight: number,
      *     screenHeightLocked: boolean,
+     *     frameCenterDx: number,
+     *     frameCenterDxLocked: boolean,
+     *     frameCenterDy: number,
+     *     frameCenterDyLocked: boolean,
+     *     padLeftLocked: boolean,
+     *     padRightLocked: boolean,
+     *     padTopBottomLocked: boolean,
      *     zoomCenterSpeedX: number,
      *     zoomCenterSpeedXLocked: boolean,
      *     zoomCenterSpeedY: number,
@@ -453,17 +453,17 @@ window.addEventListener("load", () => {
         cameraFovLocked: false,
         imageScale: 1,
         imageScaleLocked: true,
-        padLeft: 0,
-        padLeftLocked: true,
-        padRight: 0,
-        padRightLocked: true,
-        padTop: 0,
-        padBottom: 0,
-        padTopBottomLocked: true,
-        frameCenterDxLocked: false,
-        frameCenterDyLocked: false,
+        screenWidth: 0,
         screenWidthLocked: false,
+        screenHeight: 0,
         screenHeightLocked: false,
+        frameCenterDx: 0,
+        frameCenterDxLocked: false,
+        frameCenterDy: 0,
+        frameCenterDyLocked: false,
+        padLeftLocked: true,
+        padRightLocked: true,
+        padTopBottomLocked: true,
         zoomCenterSpeedX: 0,
         zoomCenterSpeedXLocked: true,
         zoomCenterSpeedY: 0,
@@ -565,15 +565,10 @@ window.addEventListener("load", () => {
             state.cameraYaw += state.cameraYawSpeed * deltaTime;
             state.cameraPitch += state.cameraPitchSpeed * deltaTime;
     
-            const screenMainFrameWidth = imageWidth * state.imageScale;
             const screenMainFrameHeight = imageHeight * state.imageScale;
             const frameZoom = (screenMainFrameHeight - state.zoomSpeed * deltaTime) / screenMainFrameHeight;
-            const screenFrameWidth = screenMainFrameWidth * frameZoom;
-            const screenFrameHeight = screenMainFrameHeight * frameZoom;
-            state.padLeft += (screenMainFrameWidth - screenFrameWidth) / 2 + state.zoomCenterSpeedX * deltaTime;
-            state.padRight += (screenMainFrameWidth - screenFrameWidth) / 2 - state.zoomCenterSpeedX * deltaTime;
-            state.padTop += (screenMainFrameHeight - screenFrameHeight) / 2 + state.zoomCenterSpeedY * deltaTime;
-            state.padBottom += (screenMainFrameHeight - screenFrameHeight) / 2 - state.zoomCenterSpeedY * deltaTime;
+            state.frameCenterDx += state.zoomCenterSpeedX * deltaTime;
+            state.frameCenterDy += state.zoomCenterSpeedY * deltaTime;
             state.imageScale *= frameZoom;
 
             const screenToCanvasTransformAfter = getToCanvasTransforms(frameIndex).screenToCanvasTransform;
@@ -1208,6 +1203,11 @@ window.addEventListener("load", () => {
         }
 
         if (imageWidth !== null && (prevImageWidth !== imageWidth || prevImageHeight !== imageHeight)) {
+            if (state.screenWidth === 0 || state.screenHeight === 0) {
+                state.screenWidth = state.imageScale * imageWidth;
+                state.screenHeight = state.imageScale * imageHeight;
+            }
+
             screenCanvasCenterDx = 0;
             screenCanvasCenterDy = 0;
             zoomIndex = Math.min(Math.max(-Math.ceil(Math.log2(Math.max(imageWidth / canvasClientWidth, imageHeight / canvasClientHeight)) * 2) / 2, CONFIG.zoomIndexMin), CONFIG.zoomIndexMax);
@@ -2689,7 +2689,15 @@ window.addEventListener("load", () => {
     const padLeftLockedInput = document.getElementById("input-pad-left-locked");
 
     initCoordsInputs([ padLeftInput ], (values) => {
-        [ state.padLeft ] = values;
+        if (imageWidth !== null) {
+            const [ newPadLeft ] = values;
+
+            const padLeft = (state.screenWidth - imageWidth * state.imageScale) / 2 + state.frameCenterDx;
+            const padLeftDelta = newPadLeft - padLeft;
+
+            state.screenWidth += padLeftDelta;
+            state.frameCenterDx += padLeftDelta / 2;
+        }
 
         requestRedraw();
     });
@@ -2710,7 +2718,15 @@ window.addEventListener("load", () => {
     const padRightLockedInput = document.getElementById("input-pad-right-locked");
 
     initCoordsInputs([ padRightInput ], (values) => {
-        [ state.padRight ] = values;
+        if (imageWidth !== null) {
+            const [ newPadRight ] = values;
+
+            const padRight = (state.screenWidth - imageWidth * state.imageScale) / 2 - state.frameCenterDx;
+            const padRightDelta = newPadRight - padRight;
+
+            state.screenWidth += padRightDelta;
+            state.frameCenterDx -= padRightDelta / 2;
+        }
 
         requestRedraw();
     });
@@ -2727,7 +2743,15 @@ window.addEventListener("load", () => {
     const padTopInput = document.getElementById("input-pad-top");
 
     initCoordsInputs([ padTopInput ], (values) => {
-        [ state.padTop ] = values;
+        if (imageWidth !== null) {
+            const [ newPadTop ] = values;
+
+            const padTop = (state.screenHeight - imageHeight * state.imageScale) / 2 + state.frameCenterDy;
+            const padTopDelta = newPadTop - padTop;
+
+            state.screenHeight += padTopDelta;
+            state.frameCenterDy += padTopDelta / 2;
+        }
 
         requestRedraw();
     });
@@ -2738,7 +2762,15 @@ window.addEventListener("load", () => {
     const padBottomInput = document.getElementById("input-pad-bottom");
     
     initCoordsInputs([ padBottomInput ], (values) => {
-        [ state.padBottom ] = values;
+        if (imageWidth !== null) {
+            const [ newPadBottom ] = values;
+
+            const padBottom = (state.screenHeight - imageHeight * state.imageScale) / 2 - state.frameCenterDy;
+            const padBottomDelta = newPadBottom - padBottom;
+
+            state.screenHeight += padBottomDelta;
+            state.frameCenterDy -= padBottomDelta / 2;
+        }
         
         requestRedraw();
     });
@@ -2764,12 +2796,7 @@ window.addEventListener("load", () => {
     const frameCenterDxLockedInput = document.getElementById("input-frame-center-dx-locked");
 
     initCoordsInputs([ frameCenterDxInput ], (values) => {
-        const [ newFrameCenterDx ] = values;
-
-        const padH = state.padLeft + state.padRight;
-        
-        state.padLeft = padH / 2 + newFrameCenterDx;
-        state.padRight = padH / 2 - newFrameCenterDx;
+        [ state.frameCenterDx ] = values;
 
         requestRedraw();
     });
@@ -2790,12 +2817,7 @@ window.addEventListener("load", () => {
     const frameCenterDyLockedInput = document.getElementById("input-frame-center-dy-locked");
 
     initCoordsInputs([ frameCenterDyInput ], (values) => {
-        const [ newFrameCenterDy ] = values;
-
-        const padV = state.padTop + state.padBottom;
-        
-        state.padTop = padV / 2 + newFrameCenterDy;
-        state.padBottom = padV / 2 - newFrameCenterDy;
+        [ state.frameCenterDy ] = values;
 
         requestRedraw();
     });
@@ -2816,16 +2838,7 @@ window.addEventListener("load", () => {
     const screenWidthLockedInput = document.getElementById("input-screen-width-locked");
 
     initCoordsInputs([ screenWidthInput ], (values) => {
-        if (imageWidth !== null) {
-            const [ newScreenWidth ] = values;
-    
-            const screenMainFrameWidth = imageWidth * state.imageScale;
-            const screenWidth = state.padLeft + screenMainFrameWidth + state.padRight;
-            const padHDelta = (newScreenWidth - screenWidth);
-            
-            state.padLeft += padHDelta / 2;
-            state.padRight += padHDelta / 2;
-        }
+        [ state.screenWidth ] = values;
 
         requestRedraw();
     });
@@ -2846,16 +2859,7 @@ window.addEventListener("load", () => {
     const screenHeightLockedInput = document.getElementById("input-screen-height-locked");
 
     initCoordsInputs([ screenHeightInput ], (values) => {
-        if (imageWidth !== null) {
-            const [ newScreenHeight ] = values;
-    
-            const screenMainFrameHeight = imageHeight * state.imageScale;
-            const screenHeight = state.padTop + screenMainFrameHeight + state.padBottom;
-            const padVDelta = newScreenHeight - screenHeight;
-    
-            state.padTop += padVDelta / 2;
-            state.padBottom += padVDelta / 2;
-        }
+        [ state.screenHeight ] = values;
 
         requestRedraw();
     });
@@ -2999,20 +3003,20 @@ window.addEventListener("load", () => {
         if (!state.cameraPitchLocked) state.cameraPitch = cameraPitch / (Math.PI / 180);
         if (!state.cameraFovLocked) state.cameraFov = cameraFov / (Math.PI / 180);
 
-        const oldImageWidth = state.padLeft + imageWidth * state.imageScale + state.padRight;
         if (!state.imageScaleLocked) state.imageScale = imageScale;
 
         // screenWidth = state.padLeft + imageWidth * state.imageScale + state.padRight
         // screenMainFrameCenterDx = (state.padLeft - state.padRight) / 2
-        const padH = state.screenWidthLocked ? oldImageWidth - imageWidth * imageScale : state.padLeftLocked ? 2 * (state.padLeft - screenMainFrameCenterDx) : state.padRightLocked ? 2 * (state.padRight + screenMainFrameCenterDx) : Math.abs(screenMainFrameCenterDx * 2);
-        if (!state.padLeftLocked) state.padLeft = padH / 2 + screenMainFrameCenterDx;
-        if (!state.padRightLocked) state.padRight = padH / 2 - screenMainFrameCenterDx;
+        const padLeft = (state.screenWidth - imageWidth * state.imageScale) / 2 + state.frameCenterDx;
+        const padRight = (state.screenWidth - imageWidth * state.imageScale) / 2 - state.frameCenterDx;
+        const padH = state.padLeftLocked ? 2 * (padLeft - screenMainFrameCenterDx) : state.padRightLocked ? 2 * (padRight + screenMainFrameCenterDx) : Math.abs(screenMainFrameCenterDx * 2);
+        if (!state.screenWidthLocked) state.screenWidth = padH + imageWidth * imageScale;
+        if (!state.frameCenterDxLocked) state.frameCenterDx = screenMainFrameCenterDx;
         
         // screenHeight = state.padTop + imageHeight * state.imageScale + state.padBottom
         // screenMainFrameCenterDy = (state.padTop - state.padBottom) / 2
-        const padV = screenHeight - imageHeight * imageScale;
-        if (!state.padTopBottomLocked) state.padTop = padV / 2 + screenMainFrameCenterDy;
-        if (!state.padTopBottomLocked) state.padBottom = padV / 2 - screenMainFrameCenterDy;
+        if (!state.screenHeightLocked) state.screenHeight = screenHeight;
+        if (!state.frameCenterDyLocked) state.frameCenterDy = screenMainFrameCenterDy;
 
         if (!state.zoomCenterSpeedXLocked) state.zoomCenterSpeedX = screenFrameCenterSpeedX;
         if (!state.zoomCenterSpeedYLocked) state.zoomCenterSpeedY = screenFrameCenterSpeedY;
@@ -3403,54 +3407,44 @@ window.addEventListener("load", () => {
         imageScaleInput.value = state.imageScale;
         imageScaleLockedInput.checked = state.imageScaleLocked;
 
-        padLeftInput.value = state.padLeft;
-        padRightInput.value = state.padRight;
-        padTopInput.value = state.padTop;
-        padBottomInput.value = state.padBottom;
+        screenWidthInput.value = state.screenWidth;
+        screenHeightInput.value = state.screenHeight;
+        screenWidthLockedInput.checked = state.screenWidthLocked;
+        screenHeightLockedInput.checked = state.screenHeightLocked;
 
+        frameCenterDxInput.value = state.frameCenterDx;
+        frameCenterDyInput.value = state.frameCenterDy;
+        frameCenterDxLockedInput.checked = state.frameCenterDxLocked;
+        frameCenterDyLockedInput.checked = state.frameCenterDyLocked;
+
+        padLeftInput.value = (state.screenWidth - imageWidth * state.imageScale) / 2 + state.frameCenterDx;
+        padRightInput.value = (state.screenWidth - imageWidth * state.imageScale) / 2 - state.frameCenterDx;
+        padTopInput.value = (state.screenHeight - imageHeight * state.imageScale) / 2 + state.frameCenterDy;
+        padBottomInput.value = (state.screenHeight - imageHeight * state.imageScale) / 2 - state.frameCenterDy;
         padLeftLockedInput.checked = state.padLeftLocked;
         padRightLockedInput.checked = state.padRightLocked;
         padTopBottomLockedInput.checked = state.padTopBottomLocked;
 
-        frameCenterDxInput.value = (state.padLeft - state.padRight) / 2;
-        frameCenterDyInput.value = (state.padTop - state.padBottom) / 2;
-
-        frameCenterDxLockedInput.checked = state.frameCenterDxLocked;
-        frameCenterDyLockedInput.checked = state.frameCenterDyLocked;
-
         zoomCenterSpeedXInput.value = state.zoomCenterSpeedX;
         zoomCenterSpeedYInput.value = state.zoomCenterSpeedY;
-        zoomSpeedInput.value = state.zoomSpeed;
-        
         zoomCenterSpeedXLockedInput.checked = state.zoomCenterSpeedXLocked;
         zoomCenterSpeedYLockedInput.checked = state.zoomCenterSpeedYLocked;
+        
+        zoomSpeedInput.value = state.zoomSpeed;
         zoomSpeedLockedInput.checked = state.zoomSpeedLocked;
 
         reversalMethodSelect.value = state.reversalMethod;
         iterationsInput.value = state.iterations;
 
         if (imageWidth !== null) {
-            const screenMainFrameWidth = imageWidth * state.imageScale;
-            const screenMainFrameHeight = imageHeight * state.imageScale;
-            const screenWidth = state.padLeft + screenMainFrameWidth + state.padRight;
-            const screenHeight = state.padTop + screenMainFrameHeight + state.padBottom;
-            screenWidthInput.value = screenWidth;
-            screenHeightInput.value = screenHeight;
-            
             const constants = projectConstants();
             const variables = projectVariables();
             const frames = projectFrames();
             const error = projectedError(constants, variables, frames);
             errorLabel.innerText = `${error} = ${Math.sqrt(error)}^2`;
         } else {
-            screenWidthInput.value = 0;
-            screenHeightInput.value = 0;
-
             errorLabel.innerText = "";
         }
-
-        screenWidthLockedInput.checked = state.screenWidthLocked;
-        screenHeightLockedInput.checked = state.screenHeightLocked;
 
         moveWorldXInput.value = state.moveWorldX;
         moveWorldYInput.value = state.moveWorldY;
@@ -3491,9 +3485,9 @@ window.addEventListener("load", () => {
             state.cameraPitch * (Math.PI / 180), // cameraPitch
             state.cameraFov * (Math.PI / 180), // cameraFov
             state.imageScale, // imageScale
-            (state.padTop + imageHeight * state.imageScale + state.padBottom), // screenHeight
-            (state.padLeft - state.padRight) / 2, // screenMainFrameCenterDx
-            (state.padTop - state.padBottom) / 2, // screenMainFrameCenterDy
+            state.screenHeight, // screenHeight
+            state.frameCenterDx, // screenMainFrameCenterDx
+            state.frameCenterDy, // screenMainFrameCenterDy
             state.zoomCenterSpeedX, // screenFrameCenterSpeedX
             state.zoomCenterSpeedY, // screenFrameCenterSpeedY
             state.zoomSpeed, // screenZoomSpeed
@@ -3516,9 +3510,9 @@ window.addEventListener("load", () => {
             state.cameraPitchLocked, // cameraPitch
             state.cameraFovLocked, // cameraFov
             state.imageScaleLocked, // imageScale
-            (state.imageScaleLocked && state.padTopBottomLocked) || state.screenHeightLocked, // screenHeight
-            (state.padRightLocked + state.padLeftLocked + state.screenWidthLocked >= 2) || state.frameCenterDxLocked, // screenMainFrameCenterDx
-            state.padTopBottomLocked || state.frameCenterDyLocked, // screenMainFrameCenterDy
+            state.screenHeightLocked || (state.imageScaleLocked && state.padTopBottomLocked), // screenHeight
+            state.frameCenterDxLocked || (state.padRightLocked + state.padLeftLocked + state.screenWidthLocked >= 2), // screenMainFrameCenterDx
+            state.frameCenterDyLocked || state.padTopBottomLocked, // screenMainFrameCenterDy
             state.zoomCenterSpeedXLocked, // screenFrameCenterSpeedX
             state.zoomCenterSpeedYLocked, // screenFrameCenterSpeedY
             state.zoomSpeedLocked, // screenZoomSpeed
@@ -3540,13 +3534,11 @@ window.addEventListener("load", () => {
 
         const screenMainFrameWidth = imageWidth * state.imageScale;
         const screenMainFrameHeight = imageHeight * state.imageScale;
-        const screenWidth = state.padLeft + screenMainFrameWidth + state.padRight;
-        const screenHeight = state.padTop + screenMainFrameHeight + state.padBottom;
-        const screenCanvasCenterX = screenWidth / 2 + screenCanvasCenterDx;
-        const screenCanvasCenterY = screenHeight / 2 + screenCanvasCenterDy;
+        const screenCanvasCenterX = state.screenWidth / 2 + screenCanvasCenterDx;
+        const screenCanvasCenterY = state.screenHeight / 2 + screenCanvasCenterDy;
 
         const canvasScreenHeight = 720;
-        const screenToCanvasZoom = screenToCanvasZoomMult * canvasScreenHeight / screenHeight;
+        const screenToCanvasZoom = screenToCanvasZoomMult * canvasScreenHeight / state.screenHeight;
 
         transform.translateSelf(frames[frameIndex].canvas.width / 2, frames[frameIndex].canvas.height / 2);
         transform.scaleSelf(screenToCanvasZoom, screenToCanvasZoom);
@@ -3554,8 +3546,8 @@ window.addEventListener("load", () => {
         transform.translateSelf(-screenCanvasCenterX, -screenCanvasCenterY);
         
         const deltaTime = state.frames[frameIndex].time - state.frames[state.mainFrameIndex].time;
-        const screenMainFrameCenterX = state.padLeft + screenMainFrameWidth / 2;
-        const screenMainFrameCenterY = state.padTop + screenMainFrameHeight / 2;
+        const screenMainFrameCenterX = state.screenWidth / 2 + state.frameCenterDx;
+        const screenMainFrameCenterY = state.screenHeight / 2 + state.frameCenterDy;
         const screenFrameCenterX = screenMainFrameCenterX + state.zoomCenterSpeedX * deltaTime;
         const screenFrameCenterY = screenMainFrameCenterY + state.zoomCenterSpeedY * deltaTime;
         const frameZoom = (screenMainFrameHeight - state.zoomSpeed * deltaTime) / screenMainFrameHeight;
@@ -3612,17 +3604,13 @@ window.addEventListener("load", () => {
             context.lineWidth = 1 / screenToCanvasZoom;
             context.strokeStyle = "#ccc";
             
-            const screenMainFrameWidth = imageWidth * state.imageScale;
-            const screenMainFrameHeight = imageHeight * state.imageScale;
-            const screenWidth = (state.padLeft + screenMainFrameWidth + state.padRight);
-            const screenHeight = (state.padTop + screenMainFrameHeight + state.padBottom);
-            context.strokeRect(-0.5 / screenToCanvasZoom, -0.5 / screenToCanvasZoom, screenWidth + 1 / screenToCanvasZoom, screenHeight + 1 / screenToCanvasZoom);
+            context.strokeRect(-0.5 / screenToCanvasZoom, -0.5 / screenToCanvasZoom, state.screenWidth + 1 / screenToCanvasZoom, state.screenHeight + 1 / screenToCanvasZoom);
 
             context.beginPath();
-            context.moveTo(screenWidth / 2 - 8, screenHeight / 2);
-            context.lineTo(screenWidth / 2 + 8, screenHeight / 2);
-            context.moveTo(screenWidth / 2, screenHeight / 2 - 8);
-            context.lineTo(screenWidth / 2, screenHeight / 2 + 8);
+            context.moveTo(state.screenWidth / 2 - 8, state.screenHeight / 2);
+            context.lineTo(state.screenWidth / 2 + 8, state.screenHeight / 2);
+            context.moveTo(state.screenWidth / 2, state.screenHeight / 2 - 8);
+            context.lineTo(state.screenWidth / 2, state.screenHeight / 2 + 8);
             context.stroke();
 
             context.setTransform(frameToCanvasTransform);
