@@ -393,6 +393,8 @@ window.addEventListener("load", () => {
      *     padTop: number,
      *     padBottom: number,
      *     padTopBottomLocked: boolean,
+     *     frameCenterDxLocked: boolean,
+     *     frameCenterDyLocked: boolean,
      *     screenWidthLocked: boolean,
      *     screenHeightLocked: boolean,
      *     zoomCenterSpeedX: number,
@@ -458,6 +460,8 @@ window.addEventListener("load", () => {
         padTop: 0,
         padBottom: 0,
         padTopBottomLocked: true,
+        frameCenterDxLocked: false,
+        frameCenterDyLocked: false,
         screenWidthLocked: false,
         screenHeightLocked: false,
         zoomCenterSpeedX: 0,
@@ -2575,6 +2579,84 @@ window.addEventListener("load", () => {
 
         requestRedraw();
     });
+
+    /**
+     * @typedef {{
+     *     imageScaleLocked: boolean,
+     *     padLeftLocked: boolean,
+     *     padRightLocked: boolean,
+     *     padTopBottomLocked: boolean,
+     *     frameCenterDxLocked: boolean,
+     *     frameCenterDyLocked: boolean,
+     *     screenWidthLocked: boolean,
+     *     screenHeightLocked: boolean,
+     * }} SizeLocks
+     */
+
+    /**
+     * 
+     * @param {SizeLocks} locks
+     * @returns {boolean}
+     */
+    function validateLocks(locks) {
+        // screenWidth = state.padLeft + imageWidth * state.imageScale + state.padRight
+        // screenMainFrameCenterDx = (state.padLeft - state.padRight) / 2
+
+        if (locks.padLeftLocked && locks.padRightLocked && locks.frameCenterDxLocked) return false;
+        if (locks.imageScaleLocked && (locks.padLeftLocked + locks.padRightLocked + locks.frameCenterDxLocked >= 2) && locks.screenWidthLocked) return false;
+        
+        // screenHeight = state.padTop + imageHeight * state.imageScale + state.padBottom
+        // screenMainFrameCenterDy = (state.padTop - state.padBottom) / 2
+        
+        if (locks.padTopBottomLocked && locks.frameCenterDyLocked) return false;
+        if (locks.imageScaleLocked && locks.padTopBottomLocked && locks.screenHeightLocked) return false;
+
+        if (locks.screenWidthLocked && (locks.padLeftLocked + locks.padRightLocked + locks.frameCenterDxLocked >= 2) && locks.screenHeightLocked && locks.padTopBottomLocked) return false;
+
+        return true;
+    }
+
+    /**
+     * 
+     * @param {Partial<SizeLocks>} changes 
+     */
+    function changeLocks(changes) {
+        const locks = [
+            "imageScaleLocked",
+            "screenWidthLocked",
+            "screenHeightLocked",
+            "frameCenterDxLocked",
+            "frameCenterDyLocked",
+            "padLeftLocked",
+            "padRightLocked",
+            "padTopBottomLocked",
+        ];
+        
+        /**
+         * @type {string[]}
+         */
+        const newStateLocks = [];
+
+        for (const key of locks) {
+            if (key in changes && changes[key]) {
+                newStateLocks.push(key);
+            }
+        }
+
+        for (const key of locks) {
+            if (!(key in changes) && state[key]) {
+                newStateLocks.push(key);
+            }
+            state[key] = false;
+        }
+
+        for (const key of newStateLocks) {
+            state[key] = true;
+            if (!validateLocks(state)) {
+                state[key] = false;
+            }
+        }
+    }
     
     /**
      * @type {HTMLInputElement}
@@ -2592,12 +2674,7 @@ window.addEventListener("load", () => {
     });
     
     imageScaleLockedInput.addEventListener("change", (event) => {
-        state.imageScaleLocked = imageScaleLockedInput.checked;
-
-        if (!state.imageScaleLocked && state.screenWidthLocked) {
-            state.padLeftLocked = false;
-            state.padRightLocked = false;
-        }
+        changeLocks({ imageScaleLocked: imageScaleLockedInput.checked });
 
         requestRedraw();
     });
@@ -2618,11 +2695,7 @@ window.addEventListener("load", () => {
     });
     
     padLeftLockedInput.addEventListener("change", (event) => {
-        state.padLeftLocked = padLeftLockedInput.checked;
-
-        if (state.padLeftLocked && (state.padRightLocked || !state.imageScaleLocked)) {
-            state.screenWidthLocked = false;
-        }
+        changeLocks({ padLeftLocked: padLeftLockedInput.checked });
 
         requestRedraw();
     });
@@ -2643,11 +2716,7 @@ window.addEventListener("load", () => {
     });
     
     padRightLockedInput.addEventListener("change", (event) => {
-        state.padRightLocked = padRightLockedInput.checked;
-
-        if (state.padRightLocked && (state.padLeftLocked || !state.imageScaleLocked)) {
-            state.screenWidthLocked = false;
-        }
+        changeLocks({ padRightLocked: padRightLockedInput.checked });
 
         requestRedraw();
     });
@@ -2680,11 +2749,59 @@ window.addEventListener("load", () => {
     const padTopBottomLockedInput = document.getElementById("input-pad-top-bottom-locked");
 
     padTopBottomLockedInput.addEventListener("change", (event) => {
-        state.padTopBottomLocked = padTopBottomLockedInput.checked;
+        changeLocks({ padTopBottomLocked: padTopBottomLockedInput.checked });
 
-        if (state.padTopBottomLocked) {
-            state.screenHeightLocked = false;
-        }
+        requestRedraw();
+    });
+
+    /**
+     * @type {HTMLInputElement}
+     */
+    const frameCenterDxInput = document.getElementById("input-frame-center-dx");
+    /**
+     * @type {HTMLInputElement}
+     */
+    const frameCenterDxLockedInput = document.getElementById("input-frame-center-dx-locked");
+
+    initCoordsInputs([ frameCenterDxInput ], (values) => {
+        const [ newFrameCenterDx ] = values;
+
+        const padH = state.padLeft + state.padRight;
+        
+        state.padLeft = padH / 2 + newFrameCenterDx;
+        state.padRight = padH / 2 - newFrameCenterDx;
+
+        requestRedraw();
+    });
+    
+    frameCenterDxLockedInput.addEventListener("change", (event) => {
+        changeLocks({ frameCenterDxLocked: frameCenterDxLockedInput.checked });
+
+        requestRedraw();
+    });
+
+    /**
+     * @type {HTMLInputElement}
+     */
+    const frameCenterDyInput = document.getElementById("input-frame-center-dy");
+    /**
+     * @type {HTMLInputElement}
+     */
+    const frameCenterDyLockedInput = document.getElementById("input-frame-center-dy-locked");
+
+    initCoordsInputs([ frameCenterDyInput ], (values) => {
+        const [ newFrameCenterDy ] = values;
+
+        const padV = state.padTop + state.padBottom;
+        
+        state.padTop = padV / 2 + newFrameCenterDy;
+        state.padBottom = padV / 2 - newFrameCenterDy;
+
+        requestRedraw();
+    });
+    
+    frameCenterDyLockedInput.addEventListener("change", (event) => {
+        changeLocks({ frameCenterDyLocked: frameCenterDyLockedInput.checked });
 
         requestRedraw();
     });
@@ -2712,12 +2829,7 @@ window.addEventListener("load", () => {
     });
     
     screenWidthLockedInput.addEventListener("change", (event) => {
-        state.screenWidthLocked = screenWidthLockedInput.checked;
-
-        if (state.screenWidthLocked && (state.padLeftLocked && state.padRightLocked || (state.padLeftLocked || state.padRightLocked) && !state.imageScaleLocked)) {
-            state.padLeftLocked = false;
-            state.padRightLocked = false;
-        }
+        changeLocks({ screenWidthLocked: screenWidthLockedInput.checked });
 
         requestRedraw();
     });
@@ -2745,11 +2857,7 @@ window.addEventListener("load", () => {
     });
     
     screenHeightLockedInput.addEventListener("change", (event) => {
-        state.screenHeightLocked = screenHeightLockedInput.checked;
-
-        if (state.screenHeightLocked) {
-            state.padTopBottomLocked = false;
-        }
+        changeLocks({ screenHeightLocked: screenHeightLockedInput.checked });
 
         requestRedraw();
     });
@@ -3300,6 +3408,12 @@ window.addEventListener("load", () => {
         padRightLockedInput.checked = state.padRightLocked;
         padTopBottomLockedInput.checked = state.padTopBottomLocked;
 
+        frameCenterDxInput.value = (state.padLeft - state.padRight) / 2;
+        frameCenterDyInput.value = (state.padTop - state.padBottom) / 2;
+
+        frameCenterDxLockedInput.checked = state.frameCenterDxLocked;
+        frameCenterDyLockedInput.checked = state.frameCenterDyLocked;
+
         zoomCenterSpeedXInput.value = state.zoomCenterSpeedX;
         zoomCenterSpeedYInput.value = state.zoomCenterSpeedY;
         zoomSpeedInput.value = state.zoomSpeed;
@@ -3399,8 +3513,8 @@ window.addEventListener("load", () => {
             state.cameraFovLocked, // cameraFov
             state.imageScaleLocked, // imageScale
             (state.imageScaleLocked && state.padTopBottomLocked) || state.screenHeightLocked, // screenHeight
-            state.padRightLocked + state.padLeftLocked + state.screenWidthLocked >= 2, // screenMainFrameCenterDx
-            state.padTopBottomLocked, // screenMainFrameCenterDy
+            (state.padRightLocked + state.padLeftLocked + state.screenWidthLocked >= 2) || state.frameCenterDxLocked, // screenMainFrameCenterDx
+            state.padTopBottomLocked || state.frameCenterDyLocked, // screenMainFrameCenterDy
             state.zoomCenterSpeedXLocked, // screenFrameCenterSpeedX
             state.zoomCenterSpeedYLocked, // screenFrameCenterSpeedY
             state.zoomSpeedLocked, // screenZoomSpeed
