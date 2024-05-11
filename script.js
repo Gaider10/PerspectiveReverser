@@ -2816,14 +2816,16 @@ window.addEventListener("load", () => {
     const screenWidthLockedInput = document.getElementById("input-screen-width-locked");
 
     initCoordsInputs([ screenWidthInput ], (values) => {
-        const [ newScreenWidth ] = values;
-
-        const screenMainFrameWidth = imageWidth * state.imageScale;
-        const screenWidth = state.padLeft + screenMainFrameWidth + state.padRight;
-        const padHDelta = (newScreenWidth - screenWidth);
-        
-        state.padLeft += padHDelta / 2;
-        state.padRight += padHDelta / 2;
+        if (imageWidth !== null) {
+            const [ newScreenWidth ] = values;
+    
+            const screenMainFrameWidth = imageWidth * state.imageScale;
+            const screenWidth = state.padLeft + screenMainFrameWidth + state.padRight;
+            const padHDelta = (newScreenWidth - screenWidth);
+            
+            state.padLeft += padHDelta / 2;
+            state.padRight += padHDelta / 2;
+        }
 
         requestRedraw();
     });
@@ -2844,14 +2846,16 @@ window.addEventListener("load", () => {
     const screenHeightLockedInput = document.getElementById("input-screen-height-locked");
 
     initCoordsInputs([ screenHeightInput ], (values) => {
-        const [ newScreenHeight ] = values;
-
-        const screenMainFrameHeight = imageHeight * state.imageScale;
-        const screenHeight = state.padTop + screenMainFrameHeight + state.padBottom;
-        const padVDelta = newScreenHeight - screenHeight;
-
-        state.padTop += padVDelta / 2;
-        state.padBottom += padVDelta / 2;
+        if (imageWidth !== null) {
+            const [ newScreenHeight ] = values;
+    
+            const screenMainFrameHeight = imageHeight * state.imageScale;
+            const screenHeight = state.padTop + screenMainFrameHeight + state.padBottom;
+            const padVDelta = newScreenHeight - screenHeight;
+    
+            state.padTop += padVDelta / 2;
+            state.padBottom += padVDelta / 2;
+        }
 
         requestRedraw();
     });
