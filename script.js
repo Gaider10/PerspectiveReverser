@@ -1142,6 +1142,10 @@ window.addEventListener("load", () => {
      * @param {number} frameIndex 
      */
     function removeFrame(frameIndex) {
+        if (state.mainFrameIndex === frameIndex) {
+            setMainFrame(state.mainFrameIndex + 1 < state.frames.length ? state.mainFrameIndex + 1 : state.mainFrameIndex > 0 ? state.mainFrameIndex - 1 : null);
+        }
+
         divFrames.removeChild(divFrames.children[frameIndex]);
         frames.splice(frameIndex, 1);
         if (frames.length !== 0) {
@@ -1154,9 +1158,6 @@ window.addEventListener("load", () => {
         }
         for (let lineIndex = state.frames[frameIndex].lines.length - 1; lineIndex >= 0; lineIndex--) {
             removeLine(frameIndex, lineIndex);
-        }
-        if (state.mainFrameIndex === frameIndex) {
-            setMainFrame(state.mainFrameIndex + 1 < state.frames.length ? state.mainFrameIndex + 1 : state.mainFrameIndex > 0 ? state.mainFrameIndex - 1 : null);
         }
         state.frames.splice(frameIndex, 1);
         if (state.mainFrameIndex !== null && state.mainFrameIndex > frameIndex) {
