@@ -2695,8 +2695,12 @@ window.addEventListener("load", () => {
             const padLeft = (state.screenWidth - imageWidth * state.imageScale) / 2 + state.frameCenterDx;
             const padLeftDelta = newPadLeft - padLeft;
 
-            state.screenWidth += padLeftDelta;
-            state.frameCenterDx += padLeftDelta / 2;
+            if (!state.screenWidthLocked || state.imageScaleLocked) {
+                state.screenWidth += padLeftDelta;
+                state.frameCenterDx += padLeftDelta / 2;
+            } else {
+                state.imageScale -= padLeftDelta / imageWidth * 2;
+            }
         }
 
         requestRedraw();
@@ -2724,8 +2728,12 @@ window.addEventListener("load", () => {
             const padRight = (state.screenWidth - imageWidth * state.imageScale) / 2 - state.frameCenterDx;
             const padRightDelta = newPadRight - padRight;
 
-            state.screenWidth += padRightDelta;
-            state.frameCenterDx -= padRightDelta / 2;
+            if (!state.screenWidthLocked || state.imageScaleLocked) {
+                state.screenWidth += padRightDelta;
+                state.frameCenterDx -= padRightDelta / 2;
+            } else {
+                state.imageScale -= padRightDelta / imageWidth * 2;
+            }
         }
 
         requestRedraw();
@@ -2748,9 +2756,13 @@ window.addEventListener("load", () => {
 
             const padTop = (state.screenHeight - imageHeight * state.imageScale) / 2 + state.frameCenterDy;
             const padTopDelta = newPadTop - padTop;
-
-            state.screenHeight += padTopDelta;
-            state.frameCenterDy += padTopDelta / 2;
+            
+            if (!state.screenHeightLocked || state.imageScaleLocked) {
+                state.screenHeight += padTopDelta;
+                state.frameCenterDy += padTopDelta / 2;
+            } else {
+                state.imageScale -= padTopDelta / imageHeight * 2;
+            }
         }
 
         requestRedraw();
@@ -2768,8 +2780,12 @@ window.addEventListener("load", () => {
             const padBottom = (state.screenHeight - imageHeight * state.imageScale) / 2 - state.frameCenterDy;
             const padBottomDelta = newPadBottom - padBottom;
 
-            state.screenHeight += padBottomDelta;
-            state.frameCenterDy -= padBottomDelta / 2;
+            if (!state.screenHeightLocked || state.imageScaleLocked) {
+                state.screenHeight += padBottomDelta;
+                state.frameCenterDy -= padBottomDelta / 2;
+            } else {
+                state.imageScale -= padBottomDelta / imageHeight * 2;
+            }
         }
         
         requestRedraw();
