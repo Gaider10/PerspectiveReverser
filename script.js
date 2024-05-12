@@ -3526,7 +3526,7 @@ window.addEventListener("load", () => {
             state.cameraYawLocked, // cameraYaw
             state.cameraPitchLocked, // cameraPitch
             state.cameraFovLocked, // cameraFov
-            state.imageScaleLocked, // imageScale
+            state.imageScaleLocked || (state.screenWidthLocked && (state.frameCenterDxLocked + state.padLeftLocked + state.padRightLocked >= 2)) || (state.screenHeightLocked && state.padTopBottomLocked), // imageScale
             state.screenHeightLocked || (state.imageScaleLocked && state.padTopBottomLocked), // screenHeight
             state.frameCenterDxLocked || (state.padRightLocked + state.padLeftLocked + state.screenWidthLocked >= 2), // screenMainFrameCenterDx
             state.frameCenterDyLocked || state.padTopBottomLocked, // screenMainFrameCenterDy
