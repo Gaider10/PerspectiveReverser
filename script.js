@@ -558,9 +558,9 @@ window.addEventListener("load", () => {
             const sinPitch = Math.sin(state.cameraPitch * (Math.PI / 180));
             const cosPitch = Math.cos(state.cameraPitch * (Math.PI / 180));
     
-            state.cameraX += (state.cameraSpeedX - state.cameraSpeedW * sinYaw - state.cameraSpeedF * sinYaw * cosPitch - state.cameraSpeedR * cosYaw) * deltaTime;
+            state.cameraX += (state.cameraSpeedX + state.cameraSpeedW * sinYaw - state.cameraSpeedF * sinYaw * cosPitch - state.cameraSpeedR * cosYaw) * deltaTime;
             state.cameraY += (state.cameraSpeedY + state.cameraSpeedF * sinPitch) * deltaTime;
-            state.cameraZ += (state.cameraSpeedZ + state.cameraSpeedW * cosYaw + state.cameraSpeedF * cosYaw * cosPitch - state.cameraSpeedR * sinYaw) * deltaTime;
+            state.cameraZ += (state.cameraSpeedZ - state.cameraSpeedW * cosYaw + state.cameraSpeedF * cosYaw * cosPitch - state.cameraSpeedR * sinYaw) * deltaTime;
 
             state.cameraYaw += state.cameraYawSpeed * deltaTime;
             state.cameraPitch += state.cameraPitchSpeed * deltaTime;
