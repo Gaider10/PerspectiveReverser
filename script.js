@@ -111,7 +111,8 @@ function projectedError(constants, variables, frames) {
             const dpx = x5 - px;
             const dpy = y5 - py;
     
-            const error = dpx * dpx + dpy * dpy;
+            const precision = frame[pointIndex][2];
+            const error = (dpx * dpx + dpy * dpy) / (precision * precision);
     
             totalError += error;
             pointCount += 1;
@@ -322,6 +323,7 @@ window.addEventListener("load", () => {
      *     wz: number,
      *     px: number,
      *     py: number,
+     *     precision?: number,
      * }} Point
      */
 
@@ -1357,6 +1359,21 @@ window.addEventListener("load", () => {
     /**
      * 
      * @param {number} frameIndex 
+     * @param {number} pointIndex 
+     * @param {number} precision 
+     */
+    function setPointPrecision(frameIndex, pointIndex, precision) {
+        const point = state.frames[frameIndex].points[pointIndex];
+        if (precision !== undefined) {
+            point.precision = precision;
+        } else {
+            delete point.precision;
+        }
+    }
+
+    /**
+     * 
+     * @param {number} frameIndex 
      * @returns {number}
      */
     function createLine(frameIndex) {
@@ -2221,6 +2238,19 @@ window.addEventListener("load", () => {
         const point = state.frames[state.selectedPoint[0]].points[state.selectedPoint[1]];
 
         navigator.clipboard.writeText(`${point.px} ${point.py}`);
+    });
+
+    /**
+     * @type {HTMLInputElement}
+     */
+    const precisionInput = document.getElementById("input-precision");
+
+    initCoordsInputs([ precisionInput ], (values) => {
+        if (state.selectedPoint === null) return;
+
+        setPointPrecision(state.selectedPoint[0], state.selectedPoint[1], values[0]);
+
+        requestRedraw();
     });
 
     /**
@@ -3375,6 +3405,9 @@ window.addEventListener("load", () => {
 
         projectedPosCopyInput.disabled = !pointSelected;
 
+        precisionInput.disabled = !pointSelected;
+        precisionInput.value = pointSelected ? state.frames[state.selectedPoint[0]].points[state.selectedPoint[1]].precision ?? 1 : "";
+
         fillSelectOptions(lineSelect, "lines", state.selectedLine);
 
         for (let frameIndex = 0; frameIndex < frames.length; frameIndex++) {
@@ -3538,7 +3571,7 @@ window.addEventListener("load", () => {
     }
 
     function projectFrames() {
-        return state.frames.map((frame) => frame.points.map((point) => [[ point.wx, point.wy, point.wz ], [ point.px, point.py ]]));
+        return state.frames.map((frame) => frame.points.map((point) => [[ point.wx, point.wy, point.wz ], [ point.px, point.py ], point.precision ?? 1 ]));
     }
 
     /**
