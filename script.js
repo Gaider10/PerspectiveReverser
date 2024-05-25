@@ -3502,6 +3502,8 @@ window.addEventListener("load", () => {
 
         stateTextarea.innerText = JSON.stringify(state);
 
+        tomdataTextarea.innerText = pointSelected ? JSON.stringify(state.frames[state.selectedPoint[0]].points.map((point) => [[point.wx, point.wy, point.wz], [point.px, point.py]])) : "";
+
         // axis1IndexSelect.selectedIndex = axis1[0];
         // axis1RangeInput.value = axis1[1];
         // axis2IndexSelect.selectedIndex = axis2[0];
