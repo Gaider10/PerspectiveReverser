@@ -298,6 +298,39 @@ async function loadImage(url) {
     });
 }
 
+/**
+ * 
+ * @param {string} str 
+ */
+async function copyToClipboard(str) {
+    return navigator.clipboard.writeText(str).catch((e) => {
+        console.log("navigator.clipboard.writeText() failed: ", e);
+
+        var textArea = document.createElement("textarea");
+        textArea.value = str;
+        
+        textArea.style.top = "0";
+        textArea.style.left = "0";
+        textArea.style.position = "fixed";
+        
+        document.body.appendChild(textArea);
+        try {
+            textArea.focus();
+            textArea.select();
+      
+            if (!document.execCommand('copy')) {
+                throw new Error("returned false")
+            }
+        } finally {
+            document.body.removeChild(textArea);
+        }
+    }).catch((e) => {
+        console.log("document.execCommand('copy') also failed: ", e);
+
+        alert(str);
+    });
+}
+
 window.addEventListener("load", () => {
     /**
      * @type {{
@@ -2214,7 +2247,7 @@ window.addEventListener("load", () => {
 
         const point = state.frames[state.selectedPoint[0]].points[state.selectedPoint[1]];
 
-        navigator.clipboard.writeText(`${point.wx} ${point.wy} ${point.wz}`);
+        copyToClipboard(`${point.wx} ${point.wy} ${point.wz}`);
     });
 
     /**
@@ -2241,7 +2274,7 @@ window.addEventListener("load", () => {
 
         const point = state.frames[state.selectedPoint[0]].points[state.selectedPoint[1]];
 
-        navigator.clipboard.writeText(`${point.px} ${point.py}`);
+        copyToClipboard(`${point.px} ${point.py}`);
     });
 
     /**
@@ -2420,7 +2453,7 @@ window.addEventListener("load", () => {
      */
     const cameraPosCopyInput = document.getElementById("input-camera-pos-copy");
     cameraPosCopyInput.addEventListener("click", (event) => {
-        navigator.clipboard.writeText(`${state.cameraX} ${state.cameraY} ${state.cameraZ}`);
+        copyToClipboard(`${state.cameraX} ${state.cameraY} ${state.cameraZ}`);
     });
 
     /**
@@ -2475,7 +2508,7 @@ window.addEventListener("load", () => {
      */
     const cameraSpeedCopyInput = document.getElementById("input-camera-speed-copy");
     cameraSpeedCopyInput.addEventListener("click", (event) => {
-        navigator.clipboard.writeText(`${state.cameraSpeedX} ${state.cameraSpeedY} ${state.cameraSpeedZ}`);
+        copyToClipboard(`${state.cameraSpeedX} ${state.cameraSpeedY} ${state.cameraSpeedZ}`);
     });
 
     /**
@@ -2591,7 +2624,7 @@ window.addEventListener("load", () => {
      */
     const cameraRotCopyInput = document.getElementById("input-camera-rot-copy");
     cameraRotCopyInput.addEventListener("click", (event) => {
-        navigator.clipboard.writeText(`${state.cameraYaw} ${state.cameraPitch}`);
+        copyToClipboard(`${state.cameraYaw} ${state.cameraPitch}`);
     });
 
     /**
@@ -3002,7 +3035,7 @@ window.addEventListener("load", () => {
      */
     const cameraTpCopyInput = document.getElementById("input-camera-tp-copy");
     cameraTpCopyInput.addEventListener("click", (event) => {
-        navigator.clipboard.writeText(`/tp @s ${state.cameraX} ${state.cameraY - 1.62} ${state.cameraZ} ${state.cameraYaw} ${state.cameraPitch}`);
+        copyToClipboard(`/tp @s ${state.cameraX} ${state.cameraY - 1.62} ${state.cameraZ} ${state.cameraYaw} ${state.cameraPitch}`);
     });
 
     /**
@@ -3021,7 +3054,7 @@ window.addEventListener("load", () => {
 
         const offset = state.offsetBy01 ? -0.1 : 0.1;
 
-        navigator.clipboard.writeText(`/tp @s ${state.cameraX + lookDirX * offset} ${state.cameraY + lookDirY * offset - 1.62} ${state.cameraZ + lookDirZ * offset} ${state.cameraYaw} ${state.cameraPitch}`);
+        copyToClipboard(`/tp @s ${state.cameraX + lookDirX * offset} ${state.cameraY + lookDirY * offset - 1.62} ${state.cameraZ + lookDirZ * offset} ${state.cameraYaw} ${state.cameraPitch}`);
     });
 
     /**
