@@ -11,10 +11,10 @@ const CONFIG = {
 
 function project(constants, variables, frameIndex, worldPoint) {
     const [ offsetBy0_1, imageWidth, imageHeight, cameraYawSpeed, cameraPitchSpeed ] = constants;
-    const [ cameraX, cameraY, cameraZ, cameraSpeedX, cameraSpeedY, cameraSpeedZ, cameraSpeedW, cameraSpeedF, cameraSpeedR, cameraYaw, cameraPitch, cameraFov, imageScale, screenHeight, screenMainFrameCenterDx, screenMainFrameCenterDy, screenFrameCenterSpeedX, screenFrameCenterSpeedY, screenZoomSpeed, ...times ] = variables;
+    const [ cameraX, cameraY, cameraZ, cameraSpeedX, cameraSpeedY, cameraSpeedZ, cameraSpeedW, cameraSpeedF, cameraSpeedR, cameraYaw, cameraPitch, cameraFov, imageScale, imageScaleY, screenHeight, screenMainFrameCenterDx, screenMainFrameCenterDy, screenFrameCenterSpeedX, screenFrameCenterSpeedY, screenZoomSpeed, ...times ] = variables;
     const time = times[frameIndex];
 
-    const screenMainFrameHeight = imageHeight * imageScale;
+    const screenMainFrameHeight = imageHeight * (imageScale * imageScaleY);
     const screenFrameCenterDx = screenMainFrameCenterDx + screenFrameCenterSpeedX * time;
     const screenFrameCenterDy = screenMainFrameCenterDy + screenFrameCenterSpeedY * time;
     const imageToScreenZoom = (screenMainFrameHeight - screenZoomSpeed * time) / screenMainFrameHeight * imageScale;
@@ -50,16 +50,16 @@ function project(constants, variables, frameIndex, worldPoint) {
     
     const w4Inv = w4 === 0 ? 0 : 1 / w4;
     const x5 = (x4 * w4Inv * screenHeight * 0.5 - screenFrameCenterDx) / imageToScreenZoom + imageWidth / 2;
-    const y5 = (y4 * w4Inv * screenHeight * 0.5 - screenFrameCenterDy) / imageToScreenZoom + imageHeight / 2;
+    const y5 = (y4 * w4Inv * screenHeight * 0.5 - screenFrameCenterDy) / (imageToScreenZoom * imageScaleY) + imageHeight / 2;
 
     return [ x5, y5 ];
 }
 
 function projectedError(constants, variables, frames) {
     const [ offsetBy0_1, imageWidth, imageHeight, cameraYawSpeed, cameraPitchSpeed ] = constants;
-    const [ cameraX, cameraY, cameraZ, cameraSpeedX, cameraSpeedY, cameraSpeedZ, cameraSpeedW, cameraSpeedF, cameraSpeedR, cameraYaw, cameraPitch, cameraFov, imageScale, screenHeight, screenMainFrameCenterDx, screenMainFrameCenterDy, screenFrameCenterSpeedX, screenFrameCenterSpeedY, screenZoomSpeed, ...times ] = variables;
+    const [ cameraX, cameraY, cameraZ, cameraSpeedX, cameraSpeedY, cameraSpeedZ, cameraSpeedW, cameraSpeedF, cameraSpeedR, cameraYaw, cameraPitch, cameraFov, imageScale, imageScaleY, screenHeight, screenMainFrameCenterDx, screenMainFrameCenterDy, screenFrameCenterSpeedX, screenFrameCenterSpeedY, screenZoomSpeed, ...times ] = variables;
 
-    const screenMainFrameHeight = imageHeight * imageScale;
+    const screenMainFrameHeight = imageHeight * (imageScale * imageScaleY);
 
     const f = 1 / Math.tan(cameraFov * 0.5);
 
@@ -104,7 +104,7 @@ function projectedError(constants, variables, frames) {
             
             const w4Inv = w4 === 0 ? 0 : 1 / w4;
             const x5 = (x4 * w4Inv * screenHeight * 0.5 - screenFrameCenterDx) / imageToScreenZoom + imageWidth / 2;
-            const y5 = (y4 * w4Inv * screenHeight * 0.5 - screenFrameCenterDy) / imageToScreenZoom + imageHeight / 2;
+            const y5 = (y4 * w4Inv * screenHeight * 0.5 - screenFrameCenterDy) / (imageToScreenZoom * imageScaleY) + imageHeight / 2;
             
             const [ px, py ] = frame[pointIndex][1];
     
@@ -388,6 +388,8 @@ window.addEventListener("load", () => {
      *     cameraFovLocked: boolean,
      *     imageScale: number,
      *     imageScaleLocked: boolean,
+     *     imageScaleY: number,
+     *     imageScaleYLocked: boolean,
      *     screenWidth: number,
      *     screenWidthLocked: boolean,
      *     screenHeight: number,
@@ -455,6 +457,8 @@ window.addEventListener("load", () => {
         cameraFovLocked: false,
         imageScale: 1,
         imageScaleLocked: true,
+        imageScaleY: 1,
+        imageScaleYLocked: true,
         screenWidth: 0,
         screenWidthLocked: true,
         screenHeight: 0,
@@ -2709,6 +2713,27 @@ window.addEventListener("load", () => {
 
         requestRedraw();
     });
+    
+    /**
+     * @type {HTMLInputElement}
+     */
+    const imageScaleYInput = document.getElementById("input-image-scale-y");
+    /**
+     * @type {HTMLInputElement}
+     */
+    const imageScaleYLockedInput = document.getElementById("input-image-scale-y-locked");
+
+    initCoordsInputs([ imageScaleYInput ], (values) => {
+        [ state.imageScaleY ] = values;
+
+        requestRedraw();
+    });
+    
+    imageScaleYLockedInput.addEventListener("change", (event) => {
+        state.imageScaleYLocked = imageScaleYLockedInput.checked;
+
+        requestRedraw();
+    });
 
     /**
      * @type {HTMLInputElement}
@@ -3036,7 +3061,7 @@ window.addEventListener("load", () => {
             "perparam": perParamDescent,
             "random": randomDescent,
         })[state.reversalMethod];
-        const [ cameraX, cameraY, cameraZ, cameraSpeedX, cameraSpeedY, cameraSpeedZ, cameraSpeedW, cameraSpeedF, cameraSpeedR, cameraYaw, cameraPitch, cameraFov, imageScale, screenHeight, screenMainFrameCenterDx, screenMainFrameCenterDy, screenFrameCenterSpeedX, screenFrameCenterSpeedY, screenZoomSpeed, ...times ] = reverseProjection(constants, variablesInitial, variablesLocked, frames, descentFunc, state.iterations);
+        const [ cameraX, cameraY, cameraZ, cameraSpeedX, cameraSpeedY, cameraSpeedZ, cameraSpeedW, cameraSpeedF, cameraSpeedR, cameraYaw, cameraPitch, cameraFov, imageScale, imageScaleY, screenHeight, screenMainFrameCenterDx, screenMainFrameCenterDy, screenFrameCenterSpeedX, screenFrameCenterSpeedY, screenZoomSpeed, ...times ] = reverseProjection(constants, variablesInitial, variablesLocked, frames, descentFunc, state.iterations);
         if (!state.cameraXLocked) state.cameraX = cameraX;
         if (!state.cameraYLocked) state.cameraY = cameraY;
         if (!state.cameraZLocked) state.cameraZ = cameraZ;
@@ -3051,6 +3076,7 @@ window.addEventListener("load", () => {
         if (!state.cameraFovLocked) state.cameraFov = cameraFov / (Math.PI / 180);
 
         if (!state.imageScaleLocked) state.imageScale = imageScale;
+        if (!state.imageScaleYLocked) state.imageScaleY = imageScaleY;
 
         // screenWidth = state.padLeft + imageWidth * state.imageScale + state.padRight
         // screenMainFrameCenterDx = (state.padLeft - state.padRight) / 2
@@ -3456,6 +3482,8 @@ window.addEventListener("load", () => {
 
         imageScaleInput.value = state.imageScale;
         imageScaleLockedInput.checked = state.imageScaleLocked;
+        imageScaleYInput.value = state.imageScaleY;
+        imageScaleYLockedInput.checked = state.imageScaleYLocked;
 
         screenWidthInput.value = state.screenWidth;
         screenHeightInput.value = state.screenHeight;
@@ -3469,8 +3497,8 @@ window.addEventListener("load", () => {
 
         padLeftInput.value = (state.screenWidth - imageWidth * state.imageScale) / 2 + state.frameCenterDx;
         padRightInput.value = (state.screenWidth - imageWidth * state.imageScale) / 2 - state.frameCenterDx;
-        padTopInput.value = (state.screenHeight - imageHeight * state.imageScale) / 2 + state.frameCenterDy;
-        padBottomInput.value = (state.screenHeight - imageHeight * state.imageScale) / 2 - state.frameCenterDy;
+        padTopInput.value = (state.screenHeight - imageHeight * state.imageScale * state.imageScaleY) / 2 + state.frameCenterDy;
+        padBottomInput.value = (state.screenHeight - imageHeight * state.imageScale * state.imageScaleY) / 2 - state.frameCenterDy;
         padLeftLockedInput.checked = state.padLeftLocked;
         padRightLockedInput.checked = state.padRightLocked;
         padTopBottomLockedInput.checked = state.padTopBottomLocked;
@@ -3537,6 +3565,7 @@ window.addEventListener("load", () => {
             state.cameraPitch * (Math.PI / 180), // cameraPitch
             state.cameraFov * (Math.PI / 180), // cameraFov
             state.imageScale, // imageScale
+            state.imageScaleY, // imageScaleY
             state.screenHeight, // screenHeight
             state.frameCenterDx, // screenMainFrameCenterDx
             state.frameCenterDy, // screenMainFrameCenterDy
@@ -3562,6 +3591,7 @@ window.addEventListener("load", () => {
             state.cameraPitchLocked, // cameraPitch
             state.cameraFovLocked, // cameraFov
             state.imageScaleLocked || (state.screenWidthLocked && (state.frameCenterDxLocked + state.padLeftLocked + state.padRightLocked >= 2)) || (state.screenHeightLocked && state.padTopBottomLocked), // imageScale
+            state.imageScaleYLocked, // imageScaleY
             state.screenHeightLocked || (state.imageScaleLocked && state.padTopBottomLocked), // screenHeight
             state.frameCenterDxLocked || (state.padRightLocked + state.padLeftLocked + state.screenWidthLocked >= 2), // screenMainFrameCenterDx
             state.frameCenterDyLocked || state.padTopBottomLocked, // screenMainFrameCenterDy
@@ -3585,7 +3615,7 @@ window.addEventListener("load", () => {
         const transform = new DOMMatrix([ 1, 0, 0, 1, 0, 0 ]);
 
         const screenMainFrameWidth = imageWidth * state.imageScale;
-        const screenMainFrameHeight = imageHeight * state.imageScale;
+        const screenMainFrameHeight = imageHeight * state.imageScale * state.imageScaleY;
         const screenCanvasCenterX = state.screenWidth / 2 + screenCanvasCenterDx;
         const screenCanvasCenterY = state.screenHeight / 2 + screenCanvasCenterDy;
 
@@ -3609,7 +3639,7 @@ window.addEventListener("load", () => {
         transform.translateSelf(screenFrameCenterX, screenFrameCenterY);
         transform.scaleSelf(frameZoom, frameZoom);
         transform.translateSelf(-screenMainFrameWidth / 2, -screenMainFrameHeight / 2);
-        transform.scaleSelf(state.imageScale, state.imageScale);
+        transform.scaleSelf(state.imageScale, state.imageScale * state.imageScaleY);
 
         return { screenToCanvasTransform, frameToCanvasTransform: transform };
     }
