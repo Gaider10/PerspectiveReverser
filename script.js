@@ -1316,8 +1316,8 @@ window.addEventListener("load", () => {
     function removePoint(frameIndex, pointIndex) {
         state.frames[frameIndex].points.splice(pointIndex, 1);
         
-        if (state.selectedPoint !== null) {
-            if (state.selectedPoint[0] === frameIndex && state.selectedPoint[1] === pointIndex) {
+        if (state.selectedPoint !== null && state.selectedPoint[0] === frameIndex) {
+            if (state.selectedPoint[1] === pointIndex) {
                 selectPoint(null);
             } else if (state.selectedPoint[1] > pointIndex) {
                 state.selectedPoint[1] -= 1;
@@ -1432,10 +1432,12 @@ window.addEventListener("load", () => {
     function removeLine(frameIndex, lineIndex) {
         state.frames[frameIndex].lines.splice(lineIndex, 1);
 
-        if (state.selectedLine !== null && state.selectedLine[0] === frameIndex && state.selectedLine[1] === lineIndex) {
-            state.selectedLine = null;
-        } else if (state.selectedLine[1] > lineIndex) {
-            state.selectedLine[1] -= 1;
+        if (state.selectedLine !== null && state.selectedLine[0] === frameIndex) {
+            if (state.selectedLine[1] === lineIndex) {
+                state.selectedLine = null;
+            } else if (state.selectedLine[1] > lineIndex) {
+                state.selectedLine[1] -= 1;
+            }
         }
         
         linesData[frameIndex].splice(lineIndex, 1);
