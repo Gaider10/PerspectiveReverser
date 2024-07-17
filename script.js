@@ -979,9 +979,13 @@ window.addEventListener("load", () => {
                         }
                     }
 
-                    if (clickedLineIndex !== null && !event.shiftKey) {
-                        if (selectLine(frameIndex, clickedLineIndex)) {
-                            selectPoint(null);
+                    if (clickedLineIndex !== null) {
+                        if (event.shiftKey && state.selectedPoint !== null && state.selectedPoint[0] === frameIndex) {
+                            toggleLinePoint(frameIndex, clickedLineIndex, state.selectedPoint[1]);
+                        } else {
+                            if (selectLine(frameIndex, clickedLineIndex)) {
+                                selectPoint(null);
+                            }
                         }
                     } else {
                         if (event.shiftKey) {
