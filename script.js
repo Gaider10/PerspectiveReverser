@@ -3806,25 +3806,19 @@ window.addEventListener("load", () => {
             const outlineEdgePath = new Path2D();
 
             for (let pointIndex = 0; pointIndex < state.frames[frameIndex].points.length; pointIndex++) {
+                const point = state.frames[frameIndex].points[pointIndex];
+
                 let selected = false;
                 if (state.selectedPoint !== null) {
                     const { wx, wy, wz } = state.frames[state.selectedPoint[0]].points[state.selectedPoint[1]];
-                    if (
-                        state.frames[frameIndex].points[pointIndex].wx === wx && 
-                        state.frames[frameIndex].points[pointIndex].wy === wy && 
-                        state.frames[frameIndex].points[pointIndex].wz === wz
-                    ) {
+                    if (point.wx === wx && point.wy === wy && point.wz === wz) {
                         selected = true;
                     }
                 }
                 if (state.selectedLine !== null) {
                     for (const linePointIndex of state.frames[state.selectedLine[0]].lines[state.selectedLine[1]].points) {
                         const { wx, wy, wz } = state.frames[state.selectedLine[0]].points[linePointIndex];
-                        if (
-                            state.frames[frameIndex].points[pointIndex].wx === wx && 
-                            state.frames[frameIndex].points[pointIndex].wy === wy && 
-                            state.frames[frameIndex].points[pointIndex].wz === wz
-                        ) {
+                        if (point.wx === wx && point.wy === wy && point.wz === wz) {
                             selected = true;
                             break;
                         }
@@ -3832,7 +3826,6 @@ window.addEventListener("load", () => {
                 }
                 const small = selected && !(state.selectedPoint !== null && state.selectedPoint[0] === frameIndex && state.selectedPoint[1] === pointIndex);
                 
-                const point = state.frames[frameIndex].points[pointIndex];
                 const pointFrameX = point.px;
                 const pointFrameY = point.py;
                 const { x: pointCanvasX, y: pointCanvasY } = frameToCanvasTransform.transformPoint(new DOMPoint(pointFrameX, pointFrameY));
@@ -3887,7 +3880,13 @@ window.addEventListener("load", () => {
                 const line = state.frames[frameIndex].lines[lineIndex];
                 const lineData = linesData[frameIndex][lineIndex];
 
-                const lineSelected = state.selectedLine !== null && state.selectedLine[0] === frameIndex && state.selectedLine[1] === lineIndex;
+                let selected = false;
+                if (state.selectedLine !== null && state.selectedLine[0] === frameIndex && state.selectedLine[1] === lineIndex) {
+                    selected = true;
+                }
+                if (state.selectedPoint !== null && state.selectedPoint[0] === frameIndex && line.points.includes(state.selectedPoint[1])) {
+                    selected = true;
+                }
 
                 const abc = calculateBestLineABCNorm(frameIndex, lineIndex);
                 if (abc !== null) {
@@ -3936,12 +3935,12 @@ window.addEventListener("load", () => {
                         }
                     }
 
-                    const path = lineSelected ? selectedLineCenterPath : lineCenterPath;
+                    const path = selected ? selectedLineCenterPath : lineCenterPath;
                     path.moveTo(x1, y1);
                     path.lineTo(x2, y2);
                 }
                 
-                if (lineSelected) {
+                if (selected) {
                     for (const pixel of line.pixels) {
                         (pixel.filled ? pixelFilledPath : pixelEmptyPath).addPath((() => {
                             const path = new Path2D();
