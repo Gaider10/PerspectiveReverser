@@ -3091,6 +3091,22 @@ window.addEventListener("load", () => {
     reverseInput.addEventListener("click", (event) => {
         if (imageWidth === null) return;
 
+        for (let frameIndex = 0; frameIndex < state.frames.length; frameIndex++) {
+            const frame = state.frames[frameIndex];
+            const worldPosToIndex = {};
+
+            for (let pointIndex = 0; pointIndex < frame.points.length; pointIndex++) {
+                const point = frame.points[pointIndex];
+                const worldPos = `${point.wx} ${point.wy} ${point.wz}`;
+                if (worldPosToIndex[worldPos] !== undefined) {
+                    alert(`Error: Points ${frameIndex}-${worldPosToIndex[worldPos]} and ${frameIndex}-${pointIndex} have the same world position: ${worldPos}`);
+                    return;
+                }
+
+                worldPosToIndex[worldPos] = pointIndex;
+            }
+        }
+
         const constants = projectConstants();
         const variablesInitial = projectVariables();
         const variablesLocked = projectVariablesLocked();
