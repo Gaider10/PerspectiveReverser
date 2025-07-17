@@ -1,4 +1,5 @@
 * {
+    box-sizing: border-box;
     user-select: none;
 }
 
@@ -103,18 +104,18 @@ input[type=number], select {
     width: fit-content;
 }
 
-#textarea-state {
-    width: 600px;
-    height: 200px;
-    box-sizing: border-box;
-}
-
-#textarea-tomdata {
-    width: 600px;
-    height: 200px;
-    box-sizing: border-box;
-}
-
 .multiframe-hidden {
     display: none;
+}
+
+.div-state {
+    width: 600px;
+    height: 200px;
+    display: flex;
+    column-gap: 4px;
+}
+
+.div-state > textarea {
+    flex-grow: 1;
+    resize: none;
 }

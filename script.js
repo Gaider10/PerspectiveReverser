@@ -3236,12 +3236,48 @@ window.addEventListener("load", () => {
     });
 
     /**
-     * @type {HTMLTextAreaElement}
+     * @param {Uint8Array} bytes
+     * @returns {string}
      */
-    const stateTextarea = document.getElementById("textarea-state");
-    stateTextarea.readOnly = true;
-    stateTextarea.addEventListener("paste", (event) => {
-        const newState = JSON.parse(event.clipboardData.getData("text"));
+    function encodeBase64(bytes) {
+        return btoa(String.fromCharCode(...bytes));
+    }
+
+    /**
+     * @param {string} str
+     * @returns {Uint8Array}
+     */
+    function decodeBase64(str) {
+        return new Uint8Array(Array.from(atob(str)).map(c => c.charCodeAt(0)))
+    }
+
+    /**
+     * @param {string} str
+     * @returns {Promise<string>}
+     */
+    async function compress(str) {
+        return encodeBase64(await new Response(new Blob([str]).stream().pipeThrough(new CompressionStream("deflate"))).bytes());
+    }
+
+    /**
+     * @param {string} str
+     * @returns {Promise<string>}
+     */
+    async function decompress(str) {
+        return await new Response(new Blob([decodeBase64(str)]).stream().pipeThrough(new DecompressionStream("deflate"))).text();
+    }
+
+    /**
+     * @param {ClipboardEvent} event
+     */
+    async function onStatePaste(event) {
+        let pasteText = event.clipboardData.getData("text");
+
+        if (/^[a-zA-Z0-9+/=]+$/.test(pasteText)) {
+            pasteText = await decompress(pasteText);
+        }
+
+        const newState = JSON.parse(pasteText);
 
         while (frames.length < newState.frames.length) {
             addFrame();
@@ -3272,7 +3308,21 @@ window.addEventListener("load", () => {
         updateAllLineData();
 
         requestRedraw();
-    });
+    }
+
+    /**
+     * @type {HTMLTextAreaElement}
+     */
+    const stateTextarea = document.getElementById("textarea-state");
+    stateTextarea.readOnly = true;
+    stateTextarea.addEventListener("paste", onStatePaste);
+
+    /**
+     * @type {HTMLTextAreaElement}
+     */
+    const compressedStateTextarea = document.getElementById("textarea-compressed-state");
+    compressedStateTextarea.readOnly = true;
+    compressedStateTextarea.addEventListener("paste", onStatePaste);
 
     /**
      * @type {HTMLTextAreaElement}
@@ -3583,7 +3633,9 @@ window.addEventListener("load", () => {
         moveWorldYInput.value = state.moveWorldY;
         moveWorldZInput.value = state.moveWorldZ;
 
-        stateTextarea.innerText = JSON.stringify(state);
+        const stateText = JSON.stringify(state);
+        stateTextarea.innerText = stateText;
+        compress(stateText).then((value) => { compressedStateTextarea.innerText = value; });
 
         tomdataTextarea.innerText = pointSelected ? JSON.stringify(state.frames[state.selectedPoint[0]].points.map((point) => [[point.wx, point.wy, point.wz], [point.px, point.py]])) : "";
 
