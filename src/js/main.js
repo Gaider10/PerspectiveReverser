@@ -1,3 +1,5 @@
+import { compress, copyToClipboard, decompress, loadImage } from "./util.js";
+
 const CONFIG = {
     doubleClickDelay: 250,
     mouseDragMin: 2,
@@ -279,58 +281,6 @@ function reverseProjection(constants, variablesInitial, variablesLocked, frames,
     return descentFunc(variablesInitial, variablesLocked, (params) => projectedError(constants, params, frames), iterations);
 }
 
-/**
- *
- * @param {string} url
- * @returns {Promise<HTMLImageElement>}
- */
-async function loadImage(url) {
-    return new Promise((resolve, reject) => {
-        const image = new Image();
-        image.crossOrigin = "anonymous";
-        image.onload = () => {
-            resolve(image);
-        };
-        image.onerror = () => {
-            reject();
-        };
-        image.src = url;
-    });
-}
-
-/**
- *
- * @param {string} str
- */
-async function copyToClipboard(str) {
-    return navigator.clipboard.writeText(str).catch((e) => {
-        console.log("navigator.clipboard.writeText() failed: ", e);
-
-        var textArea = document.createElement("textarea");
-        textArea.value = str;
-
-        textArea.style.top = "0";
-        textArea.style.left = "0";
-        textArea.style.position = "fixed";
-
-        document.body.appendChild(textArea);
-        try {
-            textArea.focus();
-            textArea.select();
-
-            if (!document.execCommand('copy')) {
-                throw new Error("returned false")
-            }
-        } finally {
-            document.body.removeChild(textArea);
-        }
-    }).catch((e) => {
-        console.log("document.execCommand('copy') also failed: ", e);
-
-        alert(str);
-    });
-}
-
 window.addEventListener("load", () => {
     /**
      * @type {{
@@ -538,10 +488,7 @@ window.addEventListener("load", () => {
     let zoomIndex = 0;
     let screenToCanvasZoomMult = 1;
 
-    /**
-     * @type {HTMLDivElement}
-     */
-    const divFrames = document.getElementById("frames");
+    const divFrames = /** @type {HTMLDivElement} */(document.getElementById("frames"));
 
     const canvasClientWidth = 600;
     const canvasClientHeight = 400;
@@ -1126,7 +1073,7 @@ window.addEventListener("load", () => {
                 }
 
                 if (state.selectedPoint !== null) {
-                    for (const [key, dsx, dsy] of [["ArrowDown", 0, 1], ["ArrowUp", 0, -1], ["ArrowRight", 1, 0], ["ArrowLeft", -1, 0]]) {
+                    for (const [key, dsx, dsy] of /** @type {const} */([["ArrowDown", 0, 1], ["ArrowUp", 0, -1], ["ArrowRight", 1, 0], ["ArrowLeft", -1, 0]])) {
                         if (event.key === key) {
                             event.preventDefault();
 
@@ -1351,7 +1298,7 @@ window.addEventListener("load", () => {
     /**
      *
      * @param {number | null} frameIndex
-     * @param {number | null} pointIndex
+     * @param {number | null} [pointIndex]
     */
    function selectPoint(frameIndex, pointIndex) {
         const isNull = frameIndex === null || frameIndex === null;
@@ -1366,7 +1313,7 @@ window.addEventListener("load", () => {
         }
 
         // TODO:
-        draggedPointIndex = null;
+        // draggedPointIndex = null;
     }
 
     /**
@@ -1843,7 +1790,7 @@ window.addEventListener("load", () => {
     /**
      *
      * @param {number | null} frameIndex
-     * @param {number | null} lineIndex
+     * @param {number | null} [lineIndex]
      * @returns {boolean}
      */
     function selectLine(frameIndex, lineIndex) {
@@ -2096,17 +2043,14 @@ window.addEventListener("load", () => {
     //     return polygon;
     // }
 
-    /**
-     * @type {HTMLInputElement}
-     */
-    const imagesInput = document.getElementById("input-images");
+    const imagesInput = /** @type {HTMLInputElement} */(document.getElementById("input-images"));
     imagesInput.addEventListener("change", () => {
         Promise.allSettled(Array.from(imagesInput.files).map(async (file) => {
             const url = URL.createObjectURL(file);
 
             const image = await loadImage(url).finally(() => URL.revokeObjectURL(url));
 
-            return [ image, file.name ];
+            return /** @type {const} */([ image, file.name ]);
         })).then((results) => {
             let failedCount = 0;
 
@@ -2142,10 +2086,7 @@ window.addEventListener("load", () => {
         });
     });
 
-    /**
-     * @type {HTMLSelectElement}
-     */
-    const pointSelect = document.getElementById("select-point");
+    const pointSelect = /** @type {HTMLSelectElement} */(document.getElementById("select-point"));
     pointSelect.addEventListener("change", () => {
         let frameIndex;
         let pointIndex;
@@ -2165,7 +2106,21 @@ window.addEventListener("load", () => {
     });
 
     /**
-     *
+     * @overload
+     * @param {[HTMLInputElement]} inputs
+     * @param {function([number]): void} changeCallback
+     */
+    /**
+     * @overload
+     * @param {[HTMLInputElement, HTMLInputElement]} inputs
+     * @param {function([number, number]): void} changeCallback
+     */
+    /**
+     * @overload
+     * @param {[HTMLInputElement, HTMLInputElement, HTMLInputElement]} inputs
+     * @param {function([number, number, number]): void} changeCallback
+     */
+    /**
      * @param {HTMLInputElement[]} inputs
      * @param {function(number[]): void} changeCallback
      */
@@ -2195,10 +2150,10 @@ window.addEventListener("load", () => {
 
                 if (!coords.includes(NaN)) {
                     if (coords.length === 1) {
-                        input.value = coords[0];
+                        input.value = String(coords[0]);
                     } else if (coords.length === inputs.length) {
                         for (let j = 0; j < inputs.length; j++) {
-                            inputs[j].value = coords[j];
+                            inputs[j].value = String(coords[j]);
                         }
                     }
                 }
@@ -2223,18 +2178,9 @@ window.addEventListener("load", () => {
         }
     }
 
-    /**
-     * @type {HTMLInputElement}
-     */
-    const worldPosXInput = document.getElementById("input-world-pos-x");
-    /**
-     * @type {HTMLInputElement}
-     */
-    const worldPosYInput = document.getElementById("input-world-pos-y");
-    /**
-     * @type {HTMLInputElement}
-     */
-    const worldPosZInput = document.getElementById("input-world-pos-z");
+    const worldPosXInput = /** @type {HTMLInputElement} */(document.getElementById("input-world-pos-x"));
+    const worldPosYInput = /** @type {HTMLInputElement} */(document.getElementById("input-world-pos-y"));
+    const worldPosZInput = /** @type {HTMLInputElement} */(document.getElementById("input-world-pos-z"));
 
     initCoordsInputs([ worldPosXInput, worldPosYInput, worldPosZInput ], (values) => {
         if (state.selectedPoint === null) return;
@@ -2244,10 +2190,7 @@ window.addEventListener("load", () => {
         requestRedraw();
     });
 
-    /**
-     * @type {HTMLInputElement}
-     */
-    const worldPosCopyInput = document.getElementById("input-world-pos-copy");
+    const worldPosCopyInput = /** @type {HTMLInputElement} */(document.getElementById("input-world-pos-copy"));
     worldPosCopyInput.addEventListener("click", (event) => {
         if (state.selectedPoint === null) return;
 
@@ -2256,14 +2199,8 @@ window.addEventListener("load", () => {
         copyToClipboard(`${point.wx} ${point.wy} ${point.wz}`);
     });
 
-    /**
-     * @type {HTMLInputElement}
-     */
-    const projectedPosXInput = document.getElementById("input-projected-pos-x");
-    /**
-     * @type {HTMLInputElement}
-     */
-    const projectedPosYInput = document.getElementById("input-projected-pos-y");
+    const projectedPosXInput = /** @type {HTMLInputElement} */(document.getElementById("input-projected-pos-x"));
+    const projectedPosYInput = /** @type {HTMLInputElement} */(document.getElementById("input-projected-pos-y"));
 
     initCoordsInputs([ projectedPosXInput, projectedPosYInput ], (values) => {
         if (state.selectedPoint === null) return;
@@ -2271,10 +2208,7 @@ window.addEventListener("load", () => {
         movePointProjected(state.selectedPoint[0], state.selectedPoint[1], ...values);
     });
 
-    /**
-     * @type {HTMLInputElement}
-     */
-    const projectedPosCopyInput = document.getElementById("input-projected-pos-copy");
+    const projectedPosCopyInput = /** @type {HTMLInputElement} */(document.getElementById("input-projected-pos-copy"));
     projectedPosCopyInput.addEventListener("click", (event) => {
         if (state.selectedPoint === null) return;
 
@@ -2283,10 +2217,7 @@ window.addEventListener("load", () => {
         copyToClipboard(`${point.px} ${point.py}`);
     });
 
-    /**
-     * @type {HTMLInputElement}
-     */
-    const precisionInput = document.getElementById("input-precision");
+    const precisionInput = /** @type {HTMLInputElement} */(document.getElementById("input-precision"));
 
     initCoordsInputs([ precisionInput ], (values) => {
         if (state.selectedPoint === null) return;
@@ -2296,10 +2227,7 @@ window.addEventListener("load", () => {
         requestRedraw();
     });
 
-    /**
-     * @type {HTMLSelectElement}
-     */
-    const lineSelect = document.getElementById("select-line");
+    const lineSelect = /** @type {HTMLSelectElement} */(document.getElementById("select-line"));
     lineSelect.addEventListener("change", () => {
         let frameIndex;
         let lineIndex;
@@ -2318,10 +2246,7 @@ window.addEventListener("load", () => {
         requestRedraw();
     });
 
-    /**
-     * @type {HTMLButtonElement}
-     */
-    const addFrameButton = document.getElementById("button-add-frame");
+    const addFrameButton = /** @type {HTMLButtonElement} */(document.getElementById("button-add-frame"));
     addFrameButton.addEventListener("click", () => {
         addFrame();
 
@@ -2346,12 +2271,9 @@ window.addEventListener("load", () => {
         return Math.sqrt(brightness * 100);
     }
 
-    /**
-     * @type {HTMLInputElement}
-     */
-    const brightnessInput = document.getElementById("input-brightness");
-    brightnessInput.min = 10;
-    brightnessInput.max = 100;
+    const brightnessInput = /** @type {HTMLInputElement} */(document.getElementById("input-brightness"));
+    brightnessInput.min = String(10);
+    brightnessInput.max = String(100);
     brightnessInput.addEventListener("input", () => {
         brightnessValueLabel.innerText = brightnessValueLabel.innerText = `${brightnessFunction(Number(brightnessInput.value))}x`;
     });
@@ -2362,75 +2284,42 @@ window.addEventListener("load", () => {
         requestRedraw();
     });
 
-    /**
-     * @type {HTMLLabelElement}
-     */
-    const brightnessValueLabel = document.getElementById("label-brightness-value");
+    const brightnessValueLabel = /** @type {HTMLLabelElement} */(document.getElementById("label-brightness-value"));
 
-    /**
-     * @type {HTMLInputElement}
-     */
-    const showGridInput = document.getElementById("input-show-grid");
+    const showGridInput = /** @type {HTMLInputElement} */(document.getElementById("input-show-grid"));
     showGridInput.addEventListener("change", () => {
         state.showGrid = showGridInput.checked;
 
         requestRedraw();
     });
 
-    /**
-     * @type {HTMLInputElement}
-     */
-    const showBlurInput = document.getElementById("input-show-blur");
+    const showBlurInput = /** @type {HTMLInputElement} */(document.getElementById("input-show-blur"));
     showBlurInput.addEventListener("change", () => {
         state.showBlur = showBlurInput.checked;
 
         requestRedraw();
     });
 
-    /**
-     * @type {HTMLInputElement}
-     */
-    const showProjectedInput = document.getElementById("input-show-projected");
+    const showProjectedInput = /** @type {HTMLInputElement} */(document.getElementById("input-show-projected"));
     showProjectedInput.addEventListener("change", () => {
         state.showProjected = showProjectedInput.checked;
 
         requestRedraw();
     });
 
-    /**
-     * @type {HTMLInputElement}
-     */
-    const offsetBy01Input = document.getElementById("input-offset-by-01");
+    const offsetBy01Input = /** @type {HTMLInputElement} */(document.getElementById("input-offset-by-01"));
     offsetBy01Input.addEventListener("change", () => {
         state.offsetBy01 = offsetBy01Input.checked;
 
         requestRedraw();
     });
 
-    /**
-     * @type {HTMLInputElement}
-     */
-    const cameraPosXInput = document.getElementById("input-camera-pos-x");
-    /**
-     * @type {HTMLInputElement}
-     */
-    const cameraPosXLockedInput = document.getElementById("input-camera-pos-x-locked");
-    /**
-     * @type {HTMLInputElement}
-     */
-    const cameraPosYInput = document.getElementById("input-camera-pos-y");
-    /**
-     * @type {HTMLInputElement}
-     */
-    const cameraPosYLockedInput = document.getElementById("input-camera-pos-y-locked");
-    /**
-     * @type {HTMLInputElement}
-     */
-    const cameraPosZInput = document.getElementById("input-camera-pos-z");
-    /**
-     * @type {HTMLInputElement}
-     */
-    const cameraPosZLockedInput = document.getElementById("input-camera-pos-z-locked");
+    const cameraPosXInput = /** @type {HTMLInputElement} */(document.getElementById("input-camera-pos-x"));
+    const cameraPosXLockedInput = /** @type {HTMLInputElement} */(document.getElementById("input-camera-pos-x-locked"));
+    const cameraPosYInput = /** @type {HTMLInputElement} */(document.getElementById("input-camera-pos-y"));
+    const cameraPosYLockedInput = /** @type {HTMLInputElement} */(document.getElementById("input-camera-pos-y-locked"));
+    const cameraPosZInput = /** @type {HTMLInputElement} */(document.getElementById("input-camera-pos-z"));
+    const cameraPosZLockedInput = /** @type {HTMLInputElement} */(document.getElementById("input-camera-pos-z-locked"));
 
     initCoordsInputs([ cameraPosXInput, cameraPosYInput, cameraPosZInput ], (values) => {
         [ state.cameraX, state.cameraY, state.cameraZ ] = values;
@@ -2454,38 +2343,17 @@ window.addEventListener("load", () => {
         requestRedraw();
     });
 
-    /**
-     * @type {HTMLInputElement}
-     */
-    const cameraPosCopyInput = document.getElementById("input-camera-pos-copy");
+    const cameraPosCopyInput = /** @type {HTMLInputElement} */(document.getElementById("input-camera-pos-copy"));
     cameraPosCopyInput.addEventListener("click", (event) => {
         copyToClipboard(`${state.cameraX} ${state.cameraY} ${state.cameraZ}`);
     });
 
-    /**
-     * @type {HTMLInputElement}
-     */
-    const cameraSpeedXInput = document.getElementById("input-camera-speed-x");
-    /**
-     * @type {HTMLInputElement}
-     */
-    const cameraSpeedXLockedInput = document.getElementById("input-camera-speed-x-locked");
-    /**
-     * @type {HTMLInputElement}
-     */
-    const cameraSpeedYInput = document.getElementById("input-camera-speed-y");
-    /**
-     * @type {HTMLInputElement}
-     */
-    const cameraSpeedYLockedInput = document.getElementById("input-camera-speed-y-locked");
-    /**
-     * @type {HTMLInputElement}
-     */
-    const cameraSpeedZInput = document.getElementById("input-camera-speed-z");
-    /**
-     * @type {HTMLInputElement}
-     */
-    const cameraSpeedZLockedInput = document.getElementById("input-camera-speed-z-locked");
+    const cameraSpeedXInput = /** @type {HTMLInputElement} */(document.getElementById("input-camera-speed-x"));
+    const cameraSpeedXLockedInput = /** @type {HTMLInputElement} */(document.getElementById("input-camera-speed-x-locked"));
+    const cameraSpeedYInput = /** @type {HTMLInputElement} */(document.getElementById("input-camera-speed-y"));
+    const cameraSpeedYLockedInput = /** @type {HTMLInputElement} */(document.getElementById("input-camera-speed-y-locked"));
+    const cameraSpeedZInput = /** @type {HTMLInputElement} */(document.getElementById("input-camera-speed-z"));
+    const cameraSpeedZLockedInput = /** @type {HTMLInputElement} */(document.getElementById("input-camera-speed-z-locked"));
 
     initCoordsInputs([ cameraSpeedXInput, cameraSpeedYInput, cameraSpeedZInput ], (values) => {
         [ state.cameraSpeedX, state.cameraSpeedY, state.cameraSpeedZ ] = values;
@@ -2509,38 +2377,17 @@ window.addEventListener("load", () => {
         requestRedraw();
     });
 
-    /**
-     * @type {HTMLInputElement}
-     */
-    const cameraSpeedCopyInput = document.getElementById("input-camera-speed-copy");
+    const cameraSpeedCopyInput = /** @type {HTMLInputElement} */(document.getElementById("input-camera-speed-copy"));
     cameraSpeedCopyInput.addEventListener("click", (event) => {
         copyToClipboard(`${state.cameraSpeedX} ${state.cameraSpeedY} ${state.cameraSpeedZ}`);
     });
 
-    /**
-     * @type {HTMLInputElement}
-     */
-    const cameraSpeedWInput = document.getElementById("input-camera-speed-w");
-    /**
-     * @type {HTMLInputElement}
-     */
-    const cameraSpeedWLockedInput = document.getElementById("input-camera-speed-w-locked");
-    /**
-     * @type {HTMLInputElement}
-     */
-    const cameraSpeedFInput = document.getElementById("input-camera-speed-f");
-    /**
-     * @type {HTMLInputElement}
-     */
-    const cameraSpeedFLockedInput = document.getElementById("input-camera-speed-f-locked");
-    /**
-     * @type {HTMLInputElement}
-     */
-    const cameraSpeedRInput = document.getElementById("input-camera-speed-r");
-    /**
-     * @type {HTMLInputElement}
-     */
-    const cameraSpeedRLockedInput = document.getElementById("input-camera-speed-r-locked");
+    const cameraSpeedWInput = /** @type {HTMLInputElement} */(document.getElementById("input-camera-speed-w"));
+    const cameraSpeedWLockedInput = /** @type {HTMLInputElement} */(document.getElementById("input-camera-speed-w-locked"));
+    const cameraSpeedFInput = /** @type {HTMLInputElement} */(document.getElementById("input-camera-speed-f"));
+    const cameraSpeedFLockedInput = /** @type {HTMLInputElement} */(document.getElementById("input-camera-speed-f-locked"));
+    const cameraSpeedRInput = /** @type {HTMLInputElement} */(document.getElementById("input-camera-speed-r"));
+    const cameraSpeedRLockedInput = /** @type {HTMLInputElement} */(document.getElementById("input-camera-speed-r-locked"));
 
     initCoordsInputs([ cameraSpeedWInput ], (values) => {
         [ state.cameraSpeedW ] = values;
@@ -2576,22 +2423,10 @@ window.addEventListener("load", () => {
         requestRedraw();
     });
 
-    /**
-     * @type {HTMLInputElement}
-     */
-    const cameraRotYawInput = document.getElementById("input-camera-rot-yaw");
-    /**
-     * @type {HTMLInputElement}
-     */
-    const cameraRotYawLockedInput = document.getElementById("input-camera-rot-yaw-locked");
-    /**
-     * @type {HTMLInputElement}
-     */
-    const cameraRotPitchInput = document.getElementById("input-camera-rot-pitch");
-    /**
-     * @type {HTMLInputElement}
-     */
-    const cameraRotPitchLockedInput = document.getElementById("input-camera-rot-pitch-locked");
+    const cameraRotYawInput = /** @type {HTMLInputElement} */(document.getElementById("input-camera-rot-yaw"));
+    const cameraRotYawLockedInput = /** @type {HTMLInputElement} */(document.getElementById("input-camera-rot-yaw-locked"));
+    const cameraRotPitchInput = /** @type {HTMLInputElement} */(document.getElementById("input-camera-rot-pitch"));
+    const cameraRotPitchLockedInput = /** @type {HTMLInputElement} */(document.getElementById("input-camera-rot-pitch-locked"));
 
     initCoordsInputs([ cameraRotYawInput, cameraRotPitchInput ], (values) => {
         [ state.cameraYaw, state.cameraPitch ] = values;
@@ -2610,14 +2445,8 @@ window.addEventListener("load", () => {
         requestRedraw();
     });
 
-    /**
-     * @type {HTMLInputElement}
-     */
-    const cameraRotSpeedYawInput = document.getElementById("input-camera-rot-speed-yaw");
-    /**
-     * @type {HTMLInputElement}
-     */
-    const cameraRotSpeedPitchInput = document.getElementById("input-camera-rot-speed-pitch");
+    const cameraRotSpeedYawInput = /** @type {HTMLInputElement} */(document.getElementById("input-camera-rot-speed-yaw"));
+    const cameraRotSpeedPitchInput = /** @type {HTMLInputElement} */(document.getElementById("input-camera-rot-speed-pitch"));
 
     initCoordsInputs([ cameraRotSpeedYawInput, cameraRotSpeedPitchInput ], (values) => {
         [ state.cameraYawSpeed, state.cameraPitchSpeed ] = values;
@@ -2625,22 +2454,13 @@ window.addEventListener("load", () => {
         requestRedraw();
     });
 
-    /**
-     * @type {HTMLInputElement}
-     */
-    const cameraRotCopyInput = document.getElementById("input-camera-rot-copy");
+    const cameraRotCopyInput = /** @type {HTMLInputElement} */(document.getElementById("input-camera-rot-copy"));
     cameraRotCopyInput.addEventListener("click", (event) => {
         copyToClipboard(`${state.cameraYaw} ${state.cameraPitch}`);
     });
 
-    /**
-     * @type {HTMLInputElement}
-     */
-    const cameraFovInput = document.getElementById("input-camera-fov");
-    /**
-     * @type {HTMLInputElement}
-     */
-    const cameraFovLockedInput = document.getElementById("input-camera-fov-locked");
+    const cameraFovInput = /** @type {HTMLInputElement} */(document.getElementById("input-camera-fov"));
+    const cameraFovLockedInput = /** @type {HTMLInputElement} */(document.getElementById("input-camera-fov-locked"));
 
     initCoordsInputs([ cameraFovInput ], (values) => {
         [ state.cameraFov ] = values;
@@ -2677,7 +2497,7 @@ window.addEventListener("load", () => {
         // screenMainFrameCenterDx = (state.padLeft - state.padRight) / 2
 
         if (locks.padLeftLocked && locks.padRightLocked && locks.frameCenterDxLocked) return false;
-        if (locks.imageScaleLocked && (locks.padLeftLocked + locks.padRightLocked + locks.frameCenterDxLocked >= 2) && locks.screenWidthLocked) return false;
+        if (locks.imageScaleLocked && (Number(locks.padLeftLocked) + Number(locks.padRightLocked) + Number(locks.frameCenterDxLocked) >= 2) && locks.screenWidthLocked) return false;
 
         // screenHeight = state.padTop + imageHeight * state.imageScale + state.padBottom
         // screenMainFrameCenterDy = (state.padTop - state.padBottom) / 2
@@ -2685,7 +2505,7 @@ window.addEventListener("load", () => {
         if (locks.padTopBottomLocked && locks.frameCenterDyLocked) return false;
         if (locks.imageScaleLocked && locks.padTopBottomLocked && locks.screenHeightLocked) return false;
 
-        if (locks.screenWidthLocked && (locks.padLeftLocked + locks.padRightLocked + locks.frameCenterDxLocked >= 2) && locks.screenHeightLocked && locks.padTopBottomLocked) return false;
+        if (locks.screenWidthLocked && (Number(locks.padLeftLocked) + Number(locks.padRightLocked) + Number(locks.frameCenterDxLocked) >= 2) && locks.screenHeightLocked && locks.padTopBottomLocked) return false;
 
         return true;
     }
@@ -2732,14 +2552,8 @@ window.addEventListener("load", () => {
         }
     }
 
-    /**
-     * @type {HTMLInputElement}
-     */
-    const imageScaleInput = document.getElementById("input-image-scale");
-    /**
-     * @type {HTMLInputElement}
-     */
-    const imageScaleLockedInput = document.getElementById("input-image-scale-locked");
+    const imageScaleInput = /** @type {HTMLInputElement} */(document.getElementById("input-image-scale"));
+    const imageScaleLockedInput = /** @type {HTMLInputElement} */(document.getElementById("input-image-scale-locked"));
 
     initCoordsInputs([ imageScaleInput ], (values) => {
         [ state.imageScale ] = values;
@@ -2753,14 +2567,8 @@ window.addEventListener("load", () => {
         requestRedraw();
     });
 
-    /**
-     * @type {HTMLInputElement}
-     */
-    const imageScaleYInput = document.getElementById("input-image-scale-y");
-    /**
-     * @type {HTMLInputElement}
-     */
-    const imageScaleYLockedInput = document.getElementById("input-image-scale-y-locked");
+    const imageScaleYInput = /** @type {HTMLInputElement} */(document.getElementById("input-image-scale-y"));
+    const imageScaleYLockedInput = /** @type {HTMLInputElement} */(document.getElementById("input-image-scale-y-locked"));
 
     initCoordsInputs([ imageScaleYInput ], (values) => {
         [ state.imageScaleY ] = values;
@@ -2774,14 +2582,8 @@ window.addEventListener("load", () => {
         requestRedraw();
     });
 
-    /**
-     * @type {HTMLInputElement}
-     */
-    const padLeftInput = document.getElementById("input-pad-left");
-    /**
-     * @type {HTMLInputElement}
-     */
-    const padLeftLockedInput = document.getElementById("input-pad-left-locked");
+    const padLeftInput = /** @type {HTMLInputElement} */(document.getElementById("input-pad-left"));
+    const padLeftLockedInput = /** @type {HTMLInputElement} */(document.getElementById("input-pad-left-locked"));
 
     initCoordsInputs([ padLeftInput ], (values) => {
         if (imageWidth !== null) {
@@ -2807,14 +2609,8 @@ window.addEventListener("load", () => {
         requestRedraw();
     });
 
-    /**
-     * @type {HTMLInputElement}
-     */
-    const padRightInput = document.getElementById("input-pad-right");
-    /**
-     * @type {HTMLInputElement}
-     */
-    const padRightLockedInput = document.getElementById("input-pad-right-locked");
+    const padRightInput = /** @type {HTMLInputElement} */(document.getElementById("input-pad-right"));
+    const padRightLockedInput = /** @type {HTMLInputElement} */(document.getElementById("input-pad-right-locked"));
 
     initCoordsInputs([ padRightInput ], (values) => {
         if (imageWidth !== null) {
@@ -2840,10 +2636,7 @@ window.addEventListener("load", () => {
         requestRedraw();
     });
 
-    /**
-     * @type {HTMLInputElement}
-     */
-    const padTopInput = document.getElementById("input-pad-top");
+    const padTopInput = /** @type {HTMLInputElement} */(document.getElementById("input-pad-top"));
 
     initCoordsInputs([ padTopInput ], (values) => {
         if (imageWidth !== null) {
@@ -2863,10 +2656,7 @@ window.addEventListener("load", () => {
         requestRedraw();
     });
 
-    /**
-     * @type {HTMLInputElement}
-     */
-    const padBottomInput = document.getElementById("input-pad-bottom");
+    const padBottomInput = /** @type {HTMLInputElement} */(document.getElementById("input-pad-bottom"));
 
     initCoordsInputs([ padBottomInput ], (values) => {
         if (imageWidth !== null) {
@@ -2886,10 +2676,7 @@ window.addEventListener("load", () => {
         requestRedraw();
     });
 
-    /**
-     * @type {HTMLInputElement}
-     */
-    const padTopBottomLockedInput = document.getElementById("input-pad-top-bottom-locked");
+    const padTopBottomLockedInput = /** @type {HTMLInputElement} */(document.getElementById("input-pad-top-bottom-locked"));
 
     padTopBottomLockedInput.addEventListener("change", (event) => {
         changeLocks({ padTopBottomLocked: padTopBottomLockedInput.checked });
@@ -2897,14 +2684,8 @@ window.addEventListener("load", () => {
         requestRedraw();
     });
 
-    /**
-     * @type {HTMLInputElement}
-     */
-    const frameCenterDxInput = document.getElementById("input-frame-center-dx");
-    /**
-     * @type {HTMLInputElement}
-     */
-    const frameCenterDxLockedInput = document.getElementById("input-frame-center-dx-locked");
+    const frameCenterDxInput = /** @type {HTMLInputElement} */(document.getElementById("input-frame-center-dx"));
+    const frameCenterDxLockedInput = /** @type {HTMLInputElement} */(document.getElementById("input-frame-center-dx-locked"));
 
     initCoordsInputs([ frameCenterDxInput ], (values) => {
         [ state.frameCenterDx ] = values;
@@ -2918,14 +2699,8 @@ window.addEventListener("load", () => {
         requestRedraw();
     });
 
-    /**
-     * @type {HTMLInputElement}
-     */
-    const frameCenterDyInput = document.getElementById("input-frame-center-dy");
-    /**
-     * @type {HTMLInputElement}
-     */
-    const frameCenterDyLockedInput = document.getElementById("input-frame-center-dy-locked");
+    const frameCenterDyInput = /** @type {HTMLInputElement} */(document.getElementById("input-frame-center-dy"));
+    const frameCenterDyLockedInput = /** @type {HTMLInputElement} */(document.getElementById("input-frame-center-dy-locked"));
 
     initCoordsInputs([ frameCenterDyInput ], (values) => {
         [ state.frameCenterDy ] = values;
@@ -2939,14 +2714,8 @@ window.addEventListener("load", () => {
         requestRedraw();
     });
 
-    /**
-     * @type {HTMLInputElement}
-     */
-    const screenWidthInput = document.getElementById("input-screen-width");
-    /**
-     * @type {HTMLInputElement}
-     */
-    const screenWidthLockedInput = document.getElementById("input-screen-width-locked");
+    const screenWidthInput = /** @type {HTMLInputElement} */(document.getElementById("input-screen-width"));
+    const screenWidthLockedInput = /** @type {HTMLInputElement} */(document.getElementById("input-screen-width-locked"));
 
     initCoordsInputs([ screenWidthInput ], (values) => {
         [ state.screenWidth ] = values;
@@ -2960,14 +2729,8 @@ window.addEventListener("load", () => {
         requestRedraw();
     });
 
-    /**
-     * @type {HTMLInputElement}
-     */
-    const screenHeightInput = document.getElementById("input-screen-height");
-    /**
-     * @type {HTMLInputElement}
-     */
-    const screenHeightLockedInput = document.getElementById("input-screen-height-locked");
+    const screenHeightInput = /** @type {HTMLInputElement} */(document.getElementById("input-screen-height"));
+    const screenHeightLockedInput = /** @type {HTMLInputElement} */(document.getElementById("input-screen-height-locked"));
 
     initCoordsInputs([ screenHeightInput ], (values) => {
         [ state.screenHeight ] = values;
@@ -2981,22 +2744,10 @@ window.addEventListener("load", () => {
         requestRedraw();
     });
 
-    /**
-     * @type {HTMLInputElement}
-     */
-    const zoomCenterSpeedXInput = document.getElementById("input-zoom-center-speed-x");
-    /**
-     * @type {HTMLInputElement}
-     */
-    const zoomCenterSpeedXLockedInput = document.getElementById("input-zoom-center-speed-x-locked");
-    /**
-     * @type {HTMLInputElement}
-     */
-    const zoomCenterSpeedYInput = document.getElementById("input-zoom-center-speed-y");
-    /**
-     * @type {HTMLInputElement}
-     */
-    const zoomCenterSpeedYLockedInput = document.getElementById("input-zoom-center-speed-y-locked");
+    const zoomCenterSpeedXInput = /** @type {HTMLInputElement} */(document.getElementById("input-zoom-center-speed-x"));
+    const zoomCenterSpeedXLockedInput = /** @type {HTMLInputElement} */(document.getElementById("input-zoom-center-speed-x-locked"));
+    const zoomCenterSpeedYInput = /** @type {HTMLInputElement} */(document.getElementById("input-zoom-center-speed-y"));
+    const zoomCenterSpeedYLockedInput = /** @type {HTMLInputElement} */(document.getElementById("input-zoom-center-speed-y-locked"));
 
     initCoordsInputs([ zoomCenterSpeedXInput, zoomCenterSpeedYInput ], (values) => {
         [ state.zoomCenterSpeedX, state.zoomCenterSpeedY ] = values;
@@ -3015,14 +2766,8 @@ window.addEventListener("load", () => {
         requestRedraw();
     });
 
-    /**
-     * @type {HTMLInputElement}
-     */
-    const zoomSpeedInput = document.getElementById("input-zoom-speed");
-    /**
-     * @type {HTMLInputElement}
-     */
-    const zoomSpeedLockedInput = document.getElementById("input-zoom-speed-locked");
+    const zoomSpeedInput = /** @type {HTMLInputElement} */(document.getElementById("input-zoom-speed"));
+    const zoomSpeedLockedInput = /** @type {HTMLInputElement} */(document.getElementById("input-zoom-speed-locked"));
 
     initCoordsInputs([ zoomSpeedInput ], (values) => {
         [ state.zoomSpeed ] = values;
@@ -3036,18 +2781,12 @@ window.addEventListener("load", () => {
         requestRedraw();
     });
 
-    /**
-     * @type {HTMLInputElement}
-     */
-    const cameraTpCopyInput = document.getElementById("input-camera-tp-copy");
+    const cameraTpCopyInput = /** @type {HTMLInputElement} */(document.getElementById("input-camera-tp-copy"));
     cameraTpCopyInput.addEventListener("click", (event) => {
         copyToClipboard(`/tp @s ${state.cameraX} ${state.cameraY - 1.62} ${state.cameraZ} ${state.cameraYaw} ${state.cameraPitch}`);
     });
 
-    /**
-     * @type {HTMLInputElement}
-     */
-    const cameraTpCopyOffsetInput = document.getElementById("input-camera-tp-copy-offset");
+    const cameraTpCopyOffsetInput = /** @type {HTMLInputElement} */(document.getElementById("input-camera-tp-copy-offset"));
     cameraTpCopyOffsetInput.addEventListener("click", (event) => {
         const sinYaw = Math.sin(state.cameraYaw * (Math.PI / 180));
         const cosYaw = Math.cos(state.cameraYaw * (Math.PI / 180));
@@ -3063,31 +2802,22 @@ window.addEventListener("load", () => {
         copyToClipboard(`/tp @s ${state.cameraX + lookDirX * offset} ${state.cameraY + lookDirY * offset - 1.62} ${state.cameraZ + lookDirZ * offset} ${state.cameraYaw} ${state.cameraPitch}`);
     });
 
-    /**
-     * @type {HTMLSelectElement}
-     */
-    const reversalMethodSelect = document.getElementById("select-reversal-method");
+    const reversalMethodSelect = /** @type {HTMLSelectElement} */(document.getElementById("select-reversal-method"));
     reversalMethodSelect.addEventListener("change", () => {
-        state.reversalMethod = reversalMethodSelect.value;
+        state.reversalMethod = /** @type {any} */(reversalMethodSelect.value);
 
         requestRedraw();
     });
 
-    /**
-     * @type {HTMLInputElement}
-     */
-    const iterationsInput = document.getElementById("input-iterations");
-    iterationsInput.min = 1;
+    const iterationsInput = /** @type {HTMLInputElement} */(document.getElementById("input-iterations"));
+    iterationsInput.min = String(1);
     iterationsInput.addEventListener("change", (event) => {
         state.iterations = Math.max(Math.floor(Number(iterationsInput.value)), 1);
 
         requestRedraw();
     });
 
-    /**
-     * @type {HTMLInputElement}
-     */
-    const reverseInput = document.getElementById("input-reverse");
+    const reverseInput = /** @type {HTMLInputElement} */(document.getElementById("input-reverse"));
     reverseInput.addEventListener("click", (event) => {
         if (imageWidth === null) return;
 
@@ -3159,18 +2889,9 @@ window.addEventListener("load", () => {
 
     const errorLabel = document.getElementById("label-error");
 
-    /**
-     * @type {HTMLInputElement}
-     */
-    const moveWorldXInput = document.getElementById("input-move-world-x");
-    /**
-     * @type {HTMLInputElement}
-     */
-    const moveWorldYInput = document.getElementById("input-move-world-y");
-    /**
-     * @type {HTMLInputElement}
-     */
-    const moveWorldZInput = document.getElementById("input-move-world-z");
+    const moveWorldXInput = /** @type {HTMLInputElement} */(document.getElementById("input-move-world-x"));
+    const moveWorldYInput = /** @type {HTMLInputElement} */(document.getElementById("input-move-world-y"));
+    const moveWorldZInput = /** @type {HTMLInputElement} */(document.getElementById("input-move-world-z"));
 
     initCoordsInputs([ moveWorldXInput, moveWorldYInput, moveWorldZInput ], (values) => {
         [ state.moveWorldX, state.moveWorldY, state.moveWorldZ ] = values;
@@ -3178,10 +2899,7 @@ window.addEventListener("load", () => {
         requestRedraw();
     });
 
-    /**
-     * @type {HTMLInputElement}
-     */
-    const moveWorldInput = document.getElementById("input-move-world");
+    const moveWorldInput = /** @type {HTMLInputElement} */(document.getElementById("input-move-world"));
     moveWorldInput.addEventListener("click", (event) => {
         const dx = state.moveWorldX;
         const dy = state.moveWorldY;
@@ -3205,10 +2923,7 @@ window.addEventListener("load", () => {
         requestRedraw();
     });
 
-    /**
-     * @type {HTMLInputElement}
-     */
-    const moveRotateInput = document.getElementById("input-rotate-world");
+    const moveRotateInput = /** @type {HTMLInputElement} */(document.getElementById("input-rotate-world"));
     moveRotateInput.addEventListener("click", (event) => {
         const cx = state.moveWorldX + 0.5;
         const cz = state.moveWorldZ + 0.5;
@@ -3234,38 +2949,6 @@ window.addEventListener("load", () => {
 
         requestRedraw();
     });
-
-    /**
-     * @param {Uint8Array} bytes
-     * @returns {string}
-     */
-    function encodeBase64(bytes) {
-        return btoa(String.fromCharCode(...bytes));
-    }
-
-    /**
-     * @param {string} str
-     * @returns {Uint8Array}
-     */
-    function decodeBase64(str) {
-        return new Uint8Array(Array.from(atob(str)).map(c => c.charCodeAt(0)))
-    }
-
-    /**
-     * @param {string} str
-     * @returns {Promise<string>}
-     */
-    async function compress(str) {
-        return encodeBase64(await new Response(new Blob([str]).stream().pipeThrough(new CompressionStream("deflate"))).bytes());
-    }
-
-    /**
-     * @param {string} str
-     * @returns {Promise<string>}
-     */
-    async function decompress(str) {
-        return await new Response(new Blob([decodeBase64(str)]).stream().pipeThrough(new DecompressionStream("deflate"))).text();
-    }
 
     /**
      * @param {ClipboardEvent} event
@@ -3310,29 +2993,20 @@ window.addEventListener("load", () => {
         requestRedraw();
     }
 
-    /**
-     * @type {HTMLTextAreaElement}
-     */
-    const stateTextarea = document.getElementById("textarea-state");
+    const stateTextarea = /** @type {HTMLTextAreaElement} */(document.getElementById("textarea-state"));
     stateTextarea.readOnly = true;
     stateTextarea.addEventListener("paste", onStatePaste);
 
-    /**
-     * @type {HTMLTextAreaElement}
-     */
-    const compressedStateTextarea = document.getElementById("textarea-compressed-state");
+    const compressedStateTextarea = /** @type {HTMLTextAreaElement} */(document.getElementById("textarea-compressed-state"));
     compressedStateTextarea.readOnly = true;
     compressedStateTextarea.addEventListener("paste", onStatePaste);
 
-    /**
-     * @type {HTMLTextAreaElement}
-     */
-    const tomdataTextarea = document.getElementById("textarea-tomdata");
+    const tomdataTextarea = /** @type {HTMLTextAreaElement} */(document.getElementById("textarea-tomdata"));
     tomdataTextarea.readOnly = true;
     tomdataTextarea.addEventListener("paste", (event) => {
         if (state.selectedPoint === null) return;
 
-        const points = JSON.parse(event.clipboardData.getData("text").replaceAll("(", "[").replaceAll(")", "]"));
+        const points = /** @type {[[number, number, number], [number, number]][]} */(JSON.parse(event.clipboardData.getData("text").replaceAll("(", "[").replaceAll(")", "]")));
 
         const frameIndex = state.selectedPoint[0];
 
@@ -3521,34 +3195,34 @@ window.addEventListener("load", () => {
 
         const pointSelected = state.selectedPoint !== null;
         worldPosXInput.disabled = !pointSelected;
-        worldPosXInput.value = pointSelected ? state.frames[state.selectedPoint[0]].points[state.selectedPoint[1]].wx : "";
+        worldPosXInput.value = pointSelected ? String(state.frames[state.selectedPoint[0]].points[state.selectedPoint[1]].wx) : "";
         worldPosYInput.disabled = !pointSelected;
-        worldPosYInput.value = pointSelected ? state.frames[state.selectedPoint[0]].points[state.selectedPoint[1]].wy : "";
+        worldPosYInput.value = pointSelected ? String(state.frames[state.selectedPoint[0]].points[state.selectedPoint[1]].wy) : "";
         worldPosZInput.disabled = !pointSelected;
-        worldPosZInput.value = pointSelected ? state.frames[state.selectedPoint[0]].points[state.selectedPoint[1]].wz : "";
+        worldPosZInput.value = pointSelected ? String(state.frames[state.selectedPoint[0]].points[state.selectedPoint[1]].wz) : "";
 
         worldPosCopyInput.disabled = !pointSelected;
 
         projectedPosXInput.disabled = !pointSelected;
-        projectedPosXInput.value = pointSelected ? state.frames[state.selectedPoint[0]].points[state.selectedPoint[1]].px : "";
+        projectedPosXInput.value = pointSelected ? String(state.frames[state.selectedPoint[0]].points[state.selectedPoint[1]].px) : "";
         projectedPosYInput.disabled = !pointSelected;
-        projectedPosYInput.value = pointSelected ? state.frames[state.selectedPoint[0]].points[state.selectedPoint[1]].py : "";
+        projectedPosYInput.value = pointSelected ? String(state.frames[state.selectedPoint[0]].points[state.selectedPoint[1]].py) : "";
 
         projectedPosCopyInput.disabled = !pointSelected;
 
         precisionInput.disabled = !pointSelected;
-        precisionInput.value = pointSelected ? state.frames[state.selectedPoint[0]].points[state.selectedPoint[1]].precision ?? 1 : "";
+        precisionInput.value = pointSelected ? String(state.frames[state.selectedPoint[0]].points[state.selectedPoint[1]].precision ?? 1) : "";
 
         fillSelectOptions(lineSelect, "lines", state.selectedLine);
 
         for (let frameIndex = 0; frameIndex < frames.length; frameIndex++) {
             frames[frameIndex].imageNameLabel.innerText = state.frames[frameIndex].name;
-            frames[frameIndex].timeInput.value = state.frames[frameIndex].time;
+            frames[frameIndex].timeInput.value = String(state.frames[frameIndex].time);
             frames[frameIndex].timeLockedInput.checked = state.frames[frameIndex].timeLocked;
             frames[frameIndex].mainInput.checked = frameIndex === state.mainFrameIndex;
         }
 
-        brightnessInput.value = brightnessFunctionInv(state.brightness);
+        brightnessInput.value = String(brightnessFunctionInv(state.brightness));
         brightnessValueLabel.innerText = `${state.brightness}x`;
 
         showGridInput.checked = state.showGrid;
@@ -3556,21 +3230,21 @@ window.addEventListener("load", () => {
         showProjectedInput.checked = state.showProjected;
         offsetBy01Input.checked = state.offsetBy01;
 
-        cameraPosXInput.value = state.cameraX;
-        cameraPosYInput.value = state.cameraY;
-        cameraPosZInput.value = state.cameraZ;
-        cameraSpeedXInput.value = state.cameraSpeedX;
-        cameraSpeedYInput.value = state.cameraSpeedY;
-        cameraSpeedZInput.value = state.cameraSpeedZ;
-        cameraSpeedWInput.value = state.cameraSpeedW;
-        cameraSpeedFInput.value = state.cameraSpeedF;
-        cameraSpeedRInput.value = state.cameraSpeedR;
-        cameraRotYawInput.value = state.cameraYaw;
-        cameraRotPitchInput.value = state.cameraPitch;
-        cameraFovInput.value = state.cameraFov;
+        cameraPosXInput.value = String(state.cameraX);
+        cameraPosYInput.value = String(state.cameraY);
+        cameraPosZInput.value = String(state.cameraZ);
+        cameraSpeedXInput.value = String(state.cameraSpeedX);
+        cameraSpeedYInput.value = String(state.cameraSpeedY);
+        cameraSpeedZInput.value = String(state.cameraSpeedZ);
+        cameraSpeedWInput.value = String(state.cameraSpeedW);
+        cameraSpeedFInput.value = String(state.cameraSpeedF);
+        cameraSpeedRInput.value = String(state.cameraSpeedR);
+        cameraRotYawInput.value = String(state.cameraYaw);
+        cameraRotPitchInput.value = String(state.cameraPitch);
+        cameraFovInput.value = String(state.cameraFov);
 
-        cameraRotSpeedYawInput.value = state.cameraYawSpeed;
-        cameraRotSpeedPitchInput.value = state.cameraPitchSpeed;
+        cameraRotSpeedYawInput.value = String(state.cameraYawSpeed);
+        cameraRotSpeedPitchInput.value = String(state.cameraPitchSpeed);
 
         cameraPosXLockedInput.checked = state.cameraXLocked;
         cameraPosYLockedInput.checked = state.cameraYLocked;
@@ -3585,39 +3259,39 @@ window.addEventListener("load", () => {
         cameraRotPitchLockedInput.checked = state.cameraPitchLocked;
         cameraFovLockedInput.checked = state.cameraFovLocked;
 
-        imageScaleInput.value = state.imageScale;
+        imageScaleInput.value = String(state.imageScale);
         imageScaleLockedInput.checked = state.imageScaleLocked;
-        imageScaleYInput.value = state.imageScaleY;
+        imageScaleYInput.value = String(state.imageScaleY);
         imageScaleYLockedInput.checked = state.imageScaleYLocked;
 
-        screenWidthInput.value = state.screenWidth;
-        screenHeightInput.value = state.screenHeight;
+        screenWidthInput.value = String(state.screenWidth);
+        screenHeightInput.value = String(state.screenHeight);
         screenWidthLockedInput.checked = state.screenWidthLocked;
         screenHeightLockedInput.checked = state.screenHeightLocked;
 
-        frameCenterDxInput.value = state.frameCenterDx;
-        frameCenterDyInput.value = state.frameCenterDy;
+        frameCenterDxInput.value = String(state.frameCenterDx);
+        frameCenterDyInput.value = String(state.frameCenterDy);
         frameCenterDxLockedInput.checked = state.frameCenterDxLocked;
         frameCenterDyLockedInput.checked = state.frameCenterDyLocked;
 
-        padLeftInput.value = (state.screenWidth - imageWidth * state.imageScale) / 2 + state.frameCenterDx;
-        padRightInput.value = (state.screenWidth - imageWidth * state.imageScale) / 2 - state.frameCenterDx;
-        padTopInput.value = (state.screenHeight - imageHeight * state.imageScale * state.imageScaleY) / 2 + state.frameCenterDy;
-        padBottomInput.value = (state.screenHeight - imageHeight * state.imageScale * state.imageScaleY) / 2 - state.frameCenterDy;
+        padLeftInput.value = String((state.screenWidth - imageWidth * state.imageScale) / 2 + state.frameCenterDx);
+        padRightInput.value = String((state.screenWidth - imageWidth * state.imageScale) / 2 - state.frameCenterDx);
+        padTopInput.value = String((state.screenHeight - imageHeight * state.imageScale * state.imageScaleY) / 2 + state.frameCenterDy);
+        padBottomInput.value = String((state.screenHeight - imageHeight * state.imageScale * state.imageScaleY) / 2 - state.frameCenterDy);
         padLeftLockedInput.checked = state.padLeftLocked;
         padRightLockedInput.checked = state.padRightLocked;
         padTopBottomLockedInput.checked = state.padTopBottomLocked;
 
-        zoomCenterSpeedXInput.value = state.zoomCenterSpeedX;
-        zoomCenterSpeedYInput.value = state.zoomCenterSpeedY;
+        zoomCenterSpeedXInput.value = String(state.zoomCenterSpeedX);
+        zoomCenterSpeedYInput.value = String(state.zoomCenterSpeedY);
         zoomCenterSpeedXLockedInput.checked = state.zoomCenterSpeedXLocked;
         zoomCenterSpeedYLockedInput.checked = state.zoomCenterSpeedYLocked;
 
-        zoomSpeedInput.value = state.zoomSpeed;
+        zoomSpeedInput.value = String(state.zoomSpeed);
         zoomSpeedLockedInput.checked = state.zoomSpeedLocked;
 
         reversalMethodSelect.value = state.reversalMethod;
-        iterationsInput.value = state.iterations;
+        iterationsInput.value = String(state.iterations);
 
         if (imageWidth !== null) {
             const constants = projectConstants();
@@ -3629,9 +3303,9 @@ window.addEventListener("load", () => {
             errorLabel.innerText = "";
         }
 
-        moveWorldXInput.value = state.moveWorldX;
-        moveWorldYInput.value = state.moveWorldY;
-        moveWorldZInput.value = state.moveWorldZ;
+        moveWorldXInput.value = String(state.moveWorldX);
+        moveWorldYInput.value = String(state.moveWorldY);
+        moveWorldZInput.value = String(state.moveWorldZ);
 
         const stateText = JSON.stringify(state);
         stateTextarea.innerText = stateText;
@@ -3697,10 +3371,10 @@ window.addEventListener("load", () => {
             state.cameraYawLocked, // cameraYaw
             state.cameraPitchLocked, // cameraPitch
             state.cameraFovLocked, // cameraFov
-            state.imageScaleLocked || (state.screenWidthLocked && (state.frameCenterDxLocked + state.padLeftLocked + state.padRightLocked >= 2)) || (state.screenHeightLocked && state.padTopBottomLocked), // imageScale
+            state.imageScaleLocked || (state.screenWidthLocked && (Number(state.frameCenterDxLocked) + Number(state.padLeftLocked) + Number(state.padRightLocked) >= 2)) || (state.screenHeightLocked && state.padTopBottomLocked), // imageScale
             state.imageScaleYLocked, // imageScaleY
             state.screenHeightLocked || (state.imageScaleLocked && state.padTopBottomLocked), // screenHeight
-            state.frameCenterDxLocked || (state.padRightLocked + state.padLeftLocked + state.screenWidthLocked >= 2), // screenMainFrameCenterDx
+            state.frameCenterDxLocked || (Number(state.padRightLocked) + Number(state.padLeftLocked) + Number(state.screenWidthLocked) >= 2), // screenMainFrameCenterDx
             state.frameCenterDyLocked || state.padTopBottomLocked, // screenMainFrameCenterDy
             state.zoomCenterSpeedXLocked, // screenFrameCenterSpeedX
             state.zoomCenterSpeedYLocked, // screenFrameCenterSpeedY
