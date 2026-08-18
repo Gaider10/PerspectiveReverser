@@ -2145,7 +2145,7 @@ window.addEventListener("load", () => {
             input.addEventListener("paste", (event) => {
                 event.preventDefault();
 
-                const text = event.clipboardData.getData("text");
+                const text = event.clipboardData.getData("text").replaceAll(",", ".");
                 const coords = text.trim().split(" ").map((s) => Number(s));
 
                 if (!coords.includes(NaN)) {
