@@ -2923,11 +2923,17 @@ window.addEventListener("load", () => {
         requestRedraw();
     });
 
-    const moveRotateInput = /** @type {HTMLInputElement} */(document.getElementById("input-rotate-world"));
-    moveRotateInput.addEventListener("click", (event) => {
-        const cx = state.moveWorldX + 0.5;
-        const cz = state.moveWorldZ + 0.5;
-
+    /**
+     * Rotate the camera and points clockwise 90 degrees around cx, cz
+     * @param {number} cx
+     * @param {number} cz
+     */
+    function rotateWorld(cx, cz) {
+        /**
+         * @param {number} x
+         * @param {number} z
+         * @returns {[number, number]}
+         */
         function rotatePos(x, z) {
             const dx = x - cx;
             const dz = z - cz;
@@ -2946,6 +2952,37 @@ window.addEventListener("load", () => {
         [ state.cameraX, state.cameraZ ] = rotatePos(state.cameraX, state.cameraZ);
         state.cameraYaw += 90;
         if (state.cameraYaw > 180) state.cameraYaw -= 360;
+    }
+
+    const rotateWorldInput = /** @type {HTMLInputElement} */(document.getElementById("input-rotate-world"));
+    rotateWorldInput.addEventListener("click", (event) => {
+        const cx = state.moveWorldX + 0.5;
+        const cz = state.moveWorldZ + 0.5;
+
+        rotateWorld(cx, cz);
+
+        requestRedraw();
+    });
+
+    const rotateAroundCameraInput = /** @type {HTMLInputElement} */(document.getElementById("input-rotate-around-camera"));
+    rotateAroundCameraInput.addEventListener("click", (event) => {
+        /**
+         * Floor but subtract 1 from odd integers
+         * @param {number} x
+         */
+        function floorTiesEven(x) {
+            let val = Math.floor(x);
+            if (val === x && (x & 1) === 1) {
+                val -= 1;
+            }
+            return val;
+        }
+
+        // With normal floor repeated rotation of integer camera position keeps increasing the coordinates, with this it enters a loop
+        const cx = floorTiesEven(state.cameraX) + 0.5;
+        const cz = floorTiesEven(state.cameraZ) + 0.5;
+
+        rotateWorld(cx, cz);
 
         requestRedraw();
     });
