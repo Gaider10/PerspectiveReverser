@@ -466,6 +466,8 @@ window.addEventListener("load", () => {
         moveWorldZ: 0,
     };
 
+    const LOCAL_STORAGE_STATE_KEY = "perspective-reverser.state";
+
     /**
      * @type {State}
      */
@@ -1093,8 +1095,6 @@ window.addEventListener("load", () => {
             }
         });
     }
-
-    addFrame();
 
     /**
      *
@@ -2987,17 +2987,26 @@ window.addEventListener("load", () => {
         requestRedraw();
     });
 
-    /**
-     * @param {ClipboardEvent} event
-     */
-    async function onStatePaste(event) {
-        let pasteText = event.clipboardData.getData("text");
-
-        if (/^[a-zA-Z0-9+/=]+$/.test(pasteText)) {
-            pasteText = await decompress(pasteText);
+    const resetStateInput = /** @type {HTMLInputElement} */(document.getElementById("input-reset-state"));
+    resetStateInput.addEventListener("click", (event) => {
+        if (!confirm("Reset all state to default values?")) {
+            return;
         }
 
-        const newState = JSON.parse(pasteText);
+        while (frames.length) {
+            removeFrame(frames.length - 1);
+        }
+        setStateFromText(JSON.stringify(defaultState));
+        addFrame();
+
+        requestRedraw();
+    });
+
+    /**
+     * @param {string} stateText
+     */
+    function setStateFromText(stateText) {
+        const newState = JSON.parse(stateText);
 
         while (frames.length < newState.frames.length) {
             addFrame();
@@ -3026,6 +3035,19 @@ window.addEventListener("load", () => {
         state = newState;
 
         updateAllLineData();
+    }
+
+    /**
+     * @param {ClipboardEvent} event
+     */
+    async function onStatePaste(event) {
+        let pasteText = event.clipboardData.getData("text");
+
+        if (/^[a-zA-Z0-9+/=]+$/.test(pasteText)) {
+            pasteText = await decompress(pasteText);
+        }
+
+        setStateFromText(pasteText);
 
         requestRedraw();
     }
@@ -3349,6 +3371,8 @@ window.addEventListener("load", () => {
         compress(stateText).then((value) => { compressedStateTextarea.innerText = value; });
 
         tomdataTextarea.innerText = pointSelected ? JSON.stringify(state.frames[state.selectedPoint[0]].points.map((point) => [[point.wx, point.wy, point.wz], [point.px, point.py]])) : "";
+
+        localStorage.setItem(LOCAL_STORAGE_STATE_KEY, stateText);
 
         // axis1IndexSelect.selectedIndex = axis1[0];
         // axis1RangeInput.value = axis1[1];
@@ -3845,6 +3869,17 @@ window.addEventListener("load", () => {
         // }
 
         // errorContext.putImageData(imageData, 0, 0);
+    }
+
+    addFrame();
+
+    const savedState = localStorage.getItem(LOCAL_STORAGE_STATE_KEY);
+    if (savedState !== null) {
+        try {
+            setStateFromText(savedState)
+        } catch (e) {
+            console.error("Error parsing saved state: ", e, savedState)
+        }
     }
 
     requestRedraw();
