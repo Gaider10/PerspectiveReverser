@@ -12,7 +12,7 @@ const CONFIG = {
 };
 
 function project(constants, variables, frameIndex, worldPoint) {
-    const [ offsetBy0_1, imageWidth, imageHeight, cameraYawSpeed, cameraPitchSpeed ] = constants;
+    const [ offsetByDistance, imageWidth, imageHeight, cameraYawSpeed, cameraPitchSpeed ] = constants;
     const [ cameraX, cameraY, cameraZ, cameraSpeedX, cameraSpeedY, cameraSpeedZ, cameraSpeedW, cameraSpeedF, cameraSpeedR, cameraYaw, cameraPitch, cameraFov, imageScale, imageScaleY, screenHeight, screenMainFrameCenterDx, screenMainFrameCenterDy, screenFrameCenterSpeedX, screenFrameCenterSpeedY, screenZoomSpeed, ...times ] = variables;
     const time = times[frameIndex];
 
@@ -48,7 +48,7 @@ function project(constants, variables, frameIndex, worldPoint) {
     const x4 = x3 * f;
     const y4 = y3 * f;
     // const z4 = z3 * zm + za;
-    const w4 = -z3 + (offsetBy0_1 ? -0.1 : 0);
+    const w4 = -z3 + offsetByDistance;
 
     const w4Inv = w4 === 0 ? 0 : 1 / w4;
     const x5 = (x4 * w4Inv * screenHeight * 0.5 - screenFrameCenterDx) / imageToScreenZoom + imageWidth / 2;
@@ -58,7 +58,7 @@ function project(constants, variables, frameIndex, worldPoint) {
 }
 
 function projectedError(constants, variables, frames) {
-    const [ offsetBy0_1, imageWidth, imageHeight, cameraYawSpeed, cameraPitchSpeed ] = constants;
+    const [ offsetByDistance, imageWidth, imageHeight, cameraYawSpeed, cameraPitchSpeed ] = constants;
     const [ cameraX, cameraY, cameraZ, cameraSpeedX, cameraSpeedY, cameraSpeedZ, cameraSpeedW, cameraSpeedF, cameraSpeedR, cameraYaw, cameraPitch, cameraFov, imageScale, imageScaleY, screenHeight, screenMainFrameCenterDx, screenMainFrameCenterDy, screenFrameCenterSpeedX, screenFrameCenterSpeedY, screenZoomSpeed, ...times ] = variables;
 
     const screenMainFrameHeight = imageHeight * (imageScale * imageScaleY);
@@ -102,7 +102,7 @@ function projectedError(constants, variables, frames) {
             const x4 = x3 * f;
             const y4 = y3 * f;
             // const z4 = z3 * zm + za;
-            const w4 = -z3 + (offsetBy0_1 ? -0.1 : 0);
+            const w4 = -z3 + offsetByDistance;
 
             const w4Inv = w4 === 0 ? 0 : 1 / w4;
             const x5 = (x4 * w4Inv * screenHeight * 0.5 - screenFrameCenterDx) / imageToScreenZoom + imageWidth / 2;
@@ -343,6 +343,7 @@ window.addEventListener("load", () => {
      *     showBlur: boolean,
      *     showProjected: boolean,
      *     offsetBy01: boolean,
+     *     offsetByDistance: number,
      *     cameraX: number,
      *     cameraXLocked: boolean,
      *     cameraY: number,
@@ -412,6 +413,7 @@ window.addEventListener("load", () => {
         showBlur: false,
         showProjected: false,
         offsetBy01: false,
+        offsetByDistance: -0.1,
         cameraX: 0,
         cameraXLocked: false,
         cameraY: 0,
@@ -2307,6 +2309,13 @@ window.addEventListener("load", () => {
         requestRedraw();
     });
 
+    const offsetByDistanceInput = /** @type {HTMLInputElement} */(document.getElementById("input-offset-by-distance"));
+    initCoordsInputs([ offsetByDistanceInput ], (values) => {
+        [ state.offsetByDistance ] = values;
+
+        requestRedraw();
+    });
+
     const offsetBy01Input = /** @type {HTMLInputElement} */(document.getElementById("input-offset-by-01"));
     offsetBy01Input.addEventListener("change", () => {
         state.offsetBy01 = offsetBy01Input.checked;
@@ -2797,7 +2806,7 @@ window.addEventListener("load", () => {
         const lookDirY = -sinPitch;
         const lookDirZ = cosPitch * cosYaw;
 
-        const offset = state.offsetBy01 ? -0.1 : 0.1;
+        const offset = (state.offsetBy01 ? 1 : -1) * state.offsetByDistance;
 
         copyToClipboard(`/tp @s ${state.cameraX + lookDirX * offset} ${state.cameraY + lookDirY * offset - 1.62} ${state.cameraZ + lookDirZ * offset} ${state.cameraYaw} ${state.cameraPitch}`);
     });
@@ -3287,6 +3296,7 @@ window.addEventListener("load", () => {
         showGridInput.checked = state.showGrid;
         showBlurInput.checked = state.showBlur;
         showProjectedInput.checked = state.showProjected;
+        offsetByDistanceInput.value = String(state.offsetByDistance);
         offsetBy01Input.checked = state.offsetBy01;
 
         cameraPosXInput.value = String(state.cameraX);
@@ -3349,6 +3359,8 @@ window.addEventListener("load", () => {
         zoomSpeedInput.value = String(state.zoomSpeed);
         zoomSpeedLockedInput.checked = state.zoomSpeedLocked;
 
+        cameraTpCopyOffsetInput.value = `Copy as /tp command with toggled ${state.offsetByDistance} offset`;
+
         reversalMethodSelect.value = state.reversalMethod;
         iterationsInput.value = String(state.iterations);
 
@@ -3384,7 +3396,7 @@ window.addEventListener("load", () => {
 
     function projectConstants() {
         return [
-            state.offsetBy01, // offsetBy0_1
+            (state.offsetBy01 ? 1 : 0) * state.offsetByDistance, // offsetByDistance
             imageWidth, // imageWidth
             imageHeight, // imageHeight
             state.cameraYawSpeed * (Math.PI / 180), // cameraYawSpeed
