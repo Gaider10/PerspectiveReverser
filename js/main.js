@@ -3005,6 +3005,8 @@ window.addEventListener("load", () => {
         while (frames.length) {
             removeFrame(frames.length - 1);
         }
+        imageWidth = null;
+        imageHeight = null;
         setStateFromText(JSON.stringify(defaultState));
         addFrame();
 
