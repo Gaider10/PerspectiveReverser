@@ -473,7 +473,13 @@ window.addEventListener("load", () => {
     /**
      * @type {State}
      */
-    let state = JSON.parse(JSON.stringify(defaultState));
+    let state;
+    try {
+        state = JSON.parse(JSON.stringify(defaultState));
+    } catch (error) {
+        alert("Default state JSON could not be parsed. (" + error + ")");
+        return;
+    }
 
     /**
      * @typedef {{
@@ -3017,7 +3023,14 @@ window.addEventListener("load", () => {
      * @param {string} stateText
      */
     function setStateFromText(stateText) {
-        const newState = JSON.parse(stateText);
+        let newState;
+        try {
+            newState = JSON.parse(stateText);
+        } catch (error) {
+            alert("State text could not be parsed as JSON. (" + error + ")");
+            return;
+        }
+        
 
         while (frames.length < newState.frames.length) {
             addFrame();
@@ -3034,7 +3047,12 @@ window.addEventListener("load", () => {
 
         for (const key in state) {
             if (typeof newState[key] === "undefined") {
-                newState[key] = JSON.parse(JSON.stringify(state[key]));
+                try {
+                    newState[key] = JSON.parse(JSON.stringify(state[key]));
+                } catch (error) {
+                    alert("State could not be parsed as JSON. (" + error + ")");
+                    delete newState[key];
+                }
             }
         }
         for (const key in newState) {
@@ -3076,7 +3094,13 @@ window.addEventListener("load", () => {
     tomdataTextarea.addEventListener("paste", (event) => {
         if (state.selectedPoint === null) return;
 
-        const points = /** @type {[[number, number, number], [number, number]][]} */(JSON.parse(event.clipboardData.getData("text").replaceAll("(", "[").replaceAll(")", "]")));
+        let points;
+        try {
+            points = /** @type {[[number, number, number], [number, number]][]} */(JSON.parse(event.clipboardData.getData("text").replaceAll("(", "[").replaceAll(")", "]")));
+        } catch (error) {
+            alert("Clipboard text for a point could not be parsed as JSON. (" + error + ")");
+            return;
+        }
 
         const frameIndex = state.selectedPoint[0];
 
