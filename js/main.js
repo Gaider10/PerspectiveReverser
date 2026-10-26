@@ -473,13 +473,7 @@ window.addEventListener("load", () => {
     /**
      * @type {State}
      */
-    let state;
-    try {
-        state = JSON.parse(JSON.stringify(defaultState));
-    } catch (error) {
-        alert("Default state JSON could not be parsed. (" + error + ")");
-        return;
-    }
+    let state = JSON.parse(JSON.stringify(defaultState));
 
     /**
      * @typedef {{
@@ -3030,7 +3024,6 @@ window.addEventListener("load", () => {
             alert("State text could not be parsed as JSON. (" + error + ")");
             return;
         }
-        
 
         while (frames.length < newState.frames.length) {
             addFrame();
@@ -3047,12 +3040,7 @@ window.addEventListener("load", () => {
 
         for (const key in state) {
             if (typeof newState[key] === "undefined") {
-                try {
-                    newState[key] = JSON.parse(JSON.stringify(state[key]));
-                } catch (error) {
-                    alert("State could not be parsed as JSON. (" + error + ")");
-                    delete newState[key];
-                }
+                newState[key] = JSON.parse(JSON.stringify(state[key]));
             }
         }
         for (const key in newState) {
@@ -3098,7 +3086,7 @@ window.addEventListener("load", () => {
         try {
             points = /** @type {[[number, number, number], [number, number]][]} */(JSON.parse(event.clipboardData.getData("text").replaceAll("(", "[").replaceAll(")", "]")));
         } catch (error) {
-            alert("Clipboard text for a point could not be parsed as JSON. (" + error + ")");
+            alert("Clipboard text for points could not be parsed as JSON. (" + error + ")");
             return;
         }
 
