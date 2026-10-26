@@ -3017,7 +3017,13 @@ window.addEventListener("load", () => {
      * @param {string} stateText
      */
     function setStateFromText(stateText) {
-        const newState = JSON.parse(stateText);
+        let newState;
+        try {
+            newState = JSON.parse(stateText);
+        } catch (error) {
+            alert("State text could not be parsed as JSON. (" + error + ")");
+            return;
+        }
 
         while (frames.length < newState.frames.length) {
             addFrame();
@@ -3076,7 +3082,13 @@ window.addEventListener("load", () => {
     tomdataTextarea.addEventListener("paste", (event) => {
         if (state.selectedPoint === null) return;
 
-        const points = /** @type {[[number, number, number], [number, number]][]} */(JSON.parse(event.clipboardData.getData("text").replaceAll("(", "[").replaceAll(")", "]")));
+        let points;
+        try {
+            points = /** @type {[[number, number, number], [number, number]][]} */(JSON.parse(event.clipboardData.getData("text").replaceAll("(", "[").replaceAll(")", "]")));
+        } catch (error) {
+            alert("Clipboard text for points could not be parsed as JSON. (" + error + ")");
+            return;
+        }
 
         const frameIndex = state.selectedPoint[0];
 
