@@ -60,6 +60,11 @@ input[type=number], select {
     outline: none;
 }
 
+.frame-drag-over .frame-canvas {
+    outline: 3px dashed #4a9eff;
+    outline-offset: -3px;
+}
+
 .add-frame-div {
     margin-bottom: 21px;
     display: flex;

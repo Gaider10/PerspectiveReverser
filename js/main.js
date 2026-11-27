@@ -9,7 +9,39 @@ const CONFIG = {
     pointInnerRadius: 10,
     pointOuterRadius: 20,
     pointEdgeWidth: 2,
+    thirdPersonDistance: 4,
 };
+
+function cameraToPlayer(s, extraOffset = 0) {
+    const sinYaw = Math.sin(s.cameraYaw * (Math.PI / 180));
+    const cosYaw = Math.cos(s.cameraYaw * (Math.PI / 180));
+    const sinPitch = Math.sin(s.cameraPitch * (Math.PI / 180));
+    const cosPitch = Math.cos(s.cameraPitch * (Math.PI / 180));
+
+    const lookX = cosPitch * -sinYaw;
+    const lookY = -sinPitch;
+    const lookZ = cosPitch * cosYaw;
+
+    const dist = extraOffset + (s.viewMode === "first" ? 0 : CONFIG.thirdPersonDistance);
+
+    let yaw = s.cameraYaw;
+    let pitch = s.cameraPitch;
+    if (s.viewMode === "front") {
+        yaw = ((yaw + 180) % 360 + 360) % 360;
+        if (yaw > 180) yaw -= 360;
+        pitch = -pitch;
+    }
+
+    const clean = (v) => Math.abs(v) < 1e-9 ? 0 : v;
+
+    return {
+        x: clean(s.cameraX + lookX * dist),
+        y: clean(s.cameraY + lookY * dist),
+        z: clean(s.cameraZ + lookZ * dist),
+        yaw,
+        pitch,
+    };
+}
 
 function project(constants, variables, frameIndex, worldPoint) {
     const [ offsetByDistance, imageWidth, imageHeight, cameraYawSpeed, cameraPitchSpeed ] = constants;
@@ -344,6 +376,7 @@ window.addEventListener("load", () => {
      *     showProjected: boolean,
      *     offsetBy01: boolean,
      *     offsetByDistance: number,
+     *     viewMode: "first" | "back" | "front",
      *     cameraX: number,
      *     cameraXLocked: boolean,
      *     cameraY: number,
@@ -414,6 +447,7 @@ window.addEventListener("load", () => {
         showProjected: false,
         offsetBy01: false,
         offsetByDistance: -0.1,
+        viewMode: "first",
         cameraX: 0,
         cameraXLocked: false,
         cameraY: 0,
@@ -599,10 +633,7 @@ window.addEventListener("load", () => {
         imageInput.type = "file";
         imageInput.accept = "image/*";
         imageInput.style.display = "none";
-        imageInput.addEventListener("change", () => {
-            if (imageInput.files.length === 0) return;
-
-            const file = imageInput.files.item(0);
+        function loadFrameImage(file) {
             const url = URL.createObjectURL(file);
 
             loadImage(url).then((image) => {
@@ -617,6 +648,11 @@ window.addEventListener("load", () => {
             }).finally(() => {
                 URL.revokeObjectURL(url);
             });
+        }
+        imageInput.addEventListener("change", () => {
+            if (imageInput.files.length === 0) return;
+
+            loadFrameImage(imageInput.files.item(0));
 
             imageInput.value = "";
         });
@@ -723,6 +759,28 @@ window.addEventListener("load", () => {
             offscreenContext,
         };
         frames.push(frame);
+
+        const hasFiles = (event) => event.dataTransfer !== null && Array.from(event.dataTransfer.types).includes("Files");
+        frameDiv.addEventListener("dragover", (event) => {
+            if (!hasFiles(event)) return;
+
+            event.preventDefault();
+            event.dataTransfer.dropEffect = "copy";
+            frameDiv.classList.add("frame-drag-over");
+        });
+        frameDiv.addEventListener("dragleave", (event) => {
+            if (event.relatedTarget instanceof Node && frameDiv.contains(event.relatedTarget)) return;
+
+            frameDiv.classList.remove("frame-drag-over");
+        });
+        frameDiv.addEventListener("drop", (event) => {
+            frameDiv.classList.remove("frame-drag-over");
+            if (!hasFiles(event)) return;
+
+            event.preventDefault();
+            const file = Array.from(event.dataTransfer.files).find((f) => f.type.startsWith("image/"));
+            if (file) loadFrameImage(file);
+        });
 
         state.frames.push({
             name: "",
@@ -2045,6 +2103,13 @@ window.addEventListener("load", () => {
     //     return polygon;
     // }
 
+    window.addEventListener("dragover", (event) => {
+        if (event.dataTransfer !== null && Array.from(event.dataTransfer.types).includes("Files")) event.preventDefault();
+    });
+    window.addEventListener("drop", (event) => {
+        if (event.dataTransfer !== null && Array.from(event.dataTransfer.types).includes("Files")) event.preventDefault();
+    });
+
     const imagesInput = /** @type {HTMLInputElement} */(document.getElementById("input-images"));
     imagesInput.addEventListener("change", () => {
         Promise.allSettled(Array.from(imagesInput.files).map(async (file) => {
@@ -2792,23 +2857,23 @@ window.addEventListener("load", () => {
 
     const cameraTpCopyInput = /** @type {HTMLInputElement} */(document.getElementById("input-camera-tp-copy"));
     cameraTpCopyInput.addEventListener("click", (event) => {
-        copyToClipboard(`/tp @s ${state.cameraX} ${state.cameraY - 1.62} ${state.cameraZ} ${state.cameraYaw} ${state.cameraPitch}`);
+        const player = cameraToPlayer(state);
+        copyToClipboard(`/tp @s ${player.x} ${player.y - 1.62} ${player.z} ${player.yaw} ${player.pitch}`);
     });
 
     const cameraTpCopyOffsetInput = /** @type {HTMLInputElement} */(document.getElementById("input-camera-tp-copy-offset"));
     cameraTpCopyOffsetInput.addEventListener("click", (event) => {
-        const sinYaw = Math.sin(state.cameraYaw * (Math.PI / 180));
-        const cosYaw = Math.cos(state.cameraYaw * (Math.PI / 180));
-        const sinPitch = Math.sin(state.cameraPitch * (Math.PI / 180));
-        const cosPitch = Math.cos(state.cameraPitch * (Math.PI / 180));
-
-        const lookDirX = cosPitch * -sinYaw;
-        const lookDirY = -sinPitch;
-        const lookDirZ = cosPitch * cosYaw;
-
         const offset = (state.offsetBy01 ? 1 : -1) * state.offsetByDistance;
 
-        copyToClipboard(`/tp @s ${state.cameraX + lookDirX * offset} ${state.cameraY + lookDirY * offset - 1.62} ${state.cameraZ + lookDirZ * offset} ${state.cameraYaw} ${state.cameraPitch}`);
+        const player = cameraToPlayer(state, offset);
+        copyToClipboard(`/tp @s ${player.x} ${player.y - 1.62} ${player.z} ${player.yaw} ${player.pitch}`);
+    });
+
+    const viewModeSelect = /** @type {HTMLSelectElement} */(document.getElementById("select-view-mode"));
+    viewModeSelect.addEventListener("change", () => {
+        state.viewMode = /** @type {any} */(viewModeSelect.value);
+
+        requestRedraw();
     });
 
     const reversalMethodSelect = /** @type {HTMLSelectElement} */(document.getElementById("select-reversal-method"));
@@ -3049,7 +3114,11 @@ window.addEventListener("load", () => {
             }
         }
 
+        const brightnessChanged = newState.brightness !== state.brightness;
+
         state = newState;
+
+        if (brightnessChanged) updateBrightness();
 
         updateAllLineData();
     }
@@ -3374,6 +3443,8 @@ window.addEventListener("load", () => {
         zoomSpeedLockedInput.checked = state.zoomSpeedLocked;
 
         cameraTpCopyOffsetInput.value = `Copy as /tp command with toggled ${state.offsetByDistance} offset`;
+
+        viewModeSelect.value = state.viewMode;
 
         reversalMethodSelect.value = state.reversalMethod;
         iterationsInput.value = String(state.iterations);
